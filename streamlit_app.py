@@ -1,7 +1,9 @@
 from __future__ import annotations
+import io
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
+import speech_recognition as sr
 import streamlit as st
 from agents import AIClient, AIProviderError, NovaOrchestrator
 
@@ -29,7 +31,7 @@ def remember(task, answer):
 def memory():
     with db() as c:
         rows = c.execute("SELECT task,answer FROM conversations ORDER BY id DESC LIMIT 6").fetchall()
-    return "\n\n".join(f"Earlier task: {q}\nEarlier answer: {a[:900]}" for q, a in reversed(rows))
+    return "\\n\\n".join(f"Earlier task: {q}\\nEarlier answer: {a[:900]}" for q, a in reversed(rows))
 
 def secret(key, default=""):
     try:
@@ -45,7 +47,7 @@ with st.sidebar:
     st.subheader("AI provider")
     st.caption("Provider: OpenRouter. Add your key in Streamlit app Settings → Secrets. Never commit API keys.")
     st.code(
-        'OPENROUTER_API_KEY = "your-openrouter-key"\nAI_BASE_URL = "https://openrouter.ai/api/v1"\nAI_MODEL = "openrouter/free"',
+        'OPENROUTER_API_KEY = "your-openrouter-key"\\nAI_BASE_URL = "https://openrouter.ai/api/v1"\\nAI_MODEL = "openrouter/free"',
         language="toml",
     )
     st.caption("Live web search uses OpenRouter's web-search tool and may incur extra usage charges.")
@@ -56,11 +58,37 @@ with st.sidebar:
         st.rerun()
 
 st.subheader("Give NOVA a task")
+st.caption("You can type in Tamil or English, or record your Tamil voice below.")
+recording = st.audio_input("🎙️ Record your Tamil instruction", sample_rate=16000)
+voice_language = st.selectbox(
+    "Speech language",
+    options=[("Tamil", "ta-IN"), ("English (India)", "en-IN")],
+    format_func=lambda item: item[0],
+    index=0,
+)
+if recording is not None and st.button("Convert voice to text"):
+    try:
+        recognizer = sr.Recognizer()
+        with sr.AudioFile(io.BytesIO(recording.getvalue())) as audio_source:
+            audio_data = recognizer.record(audio_source)
+        with st.spinner("Understanding your speech…"):
+            transcript = recognizer.recognize_google(audio_data, language=voice_language[1])
+        st.session_state["task_input"] = transcript
+        st.success("Voice converted. Check the text below, edit if needed, then run NOVA.")
+        st.rerun()
+    except sr.UnknownValueError:
+        st.error("I could not understand that recording. Please speak clearly and record again.")
+    except sr.RequestError as exc:
+        st.error(f"Speech recognition is temporarily unavailable: {exc}")
+    except Exception as exc:
+        st.error(f"Could not process the recording: {exc}")
+st.caption("Privacy: when you press Convert voice to text, the recording is sent to Google's speech-recognition service. Do not record passwords or private information.")
 task = st.text_area(
     "Task",
-    placeholder="Example: Research a topic, compare options, or design and write a small app.",
+    placeholder="Example: தமிழில் உங்கள் வேலையைச் சொல்லுங்கள்…",
     height=130,
     label_visibility="collapsed",
+    key="task_input",
 )
 enable_web_search = st.checkbox(
     "🌐 Enable live web research (may incur extra OpenRouter charges)",
