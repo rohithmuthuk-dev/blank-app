@@ -31,7 +31,7 @@ def remember(task, answer):
 def memory():
     with db() as c:
         rows = c.execute("SELECT task,answer FROM conversations ORDER BY id DESC LIMIT 6").fetchall()
-    return "\\n\\n".join(f"Earlier task: {q}\\nEarlier answer: {a[:900]}" for q, a in reversed(rows))
+    return "\n\n".join(f"Earlier task: {q}\nEarlier answer: {a[:900]}" for q, a in reversed(rows))
 
 def secret(key, default=""):
     try:
@@ -47,7 +47,7 @@ with st.sidebar:
     st.subheader("AI provider")
     st.caption("Provider: OpenRouter. Add your key in Streamlit app Settings → Secrets. Never commit API keys.")
     st.code(
-        'OPENROUTER_API_KEY = "your-openrouter-key"\\nAI_BASE_URL = "https://openrouter.ai/api/v1"\\nAI_MODEL = "openrouter/free"',
+        'OPENROUTER_API_KEY = "your-openrouter-key"\nAI_BASE_URL = "https://openrouter.ai/api/v1"\nAI_MODEL = "openrouter/free"',
         language="toml",
     )
     st.caption("Live web search uses OpenRouter's web-search tool and may incur extra usage charges.")
