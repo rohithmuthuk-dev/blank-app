@@ -4,7 +4,8 @@ import os
 import requests
 from typing import Callable
 
-DEFAULT_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
+DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
+DEFAULT_MODEL = "openrouter/free"
 
 class AIProviderError(RuntimeError):
     pass
@@ -13,15 +14,16 @@ class AIClient:
     def __init__(self, api_key=None, base_url=None, model=None):
         self.api_key = api_key or os.getenv("AI_API_KEY", "")
         self.base_url = (base_url or os.getenv("AI_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
-        self.model = model or os.getenv("AI_MODEL", "glm-4.5-flash")
+        self.model = model or os.getenv("AI_MODEL", DEFAULT_MODEL)
 
     def chat(self, system: str, user: str, temperature: float = 0.4) -> str:
         if not self.api_key:
-            raise AIProviderError("Add AI_API_KEY in Streamlit app Secrets.")
+            raise AIProviderError("Add OPENROUTER_API_KEY in Streamlit app Secrets.")
         try:
             response = requests.post(
                 self.base_url + "/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json",
+                         "HTTP-Referer": "https://nova-ai.streamlit.app", "X-Title": "NOVA AI"},
                 json={"model": self.model, "temperature": temperature,
                       "messages": [{"role":"system","content":system},{"role":"user","content":user}]},
                 timeout=90,
@@ -30,9 +32,9 @@ class AIClient:
             return response.json()["choices"][0]["message"]["content"].strip()
         except requests.RequestException as exc:
             detail = getattr(getattr(exc,"response",None),"text","")
-            raise AIProviderError(f"Provider request failed: {detail or exc}") from exc
+            raise AIProviderError(f"OpenRouter request failed: {detail or exc}") from exc
         except (KeyError, IndexError, TypeError) as exc:
-            raise AIProviderError("Unexpected response from AI provider.") from exc
+            raise AIProviderError("Unexpected response from OpenRouter.") from exc
 
 class Agent:
     def __init__(self,name,instructions,client):
