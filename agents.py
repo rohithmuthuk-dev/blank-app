@@ -7,6 +7,8 @@ from typing import Callable
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "openrouter/free"
 
+LANGUAGE_GUIDANCE = """The user may write or speak in Tamil (தமிழ்), colloquial Tamil, or mixed Tamil-English. Understand the intended task even when the wording is informal. For Tamil or Tamil-English requests, respond in natural, simple Tamil while retaining useful English technical terms and names. For English requests, respond in English. Do not translate away important details. If the request is genuinely ambiguous, ask one short clarification. Only perform capabilities that are actually available; never claim an external action was completed when it was not."""
+
 class AIProviderError(RuntimeError):
     pass
 
@@ -29,8 +31,6 @@ class AIClient:
             ],
         }
         if enable_web_search:
-            # OpenRouter performs the search server-side; the model decides when to search.
-            # This may incur OpenRouter web-search charges in addition to model usage.
             payload["tools"] = [{
                 "type": "openrouter:web_search",
                 "parameters": {"max_results": 5, "max_total_results": 10},
@@ -76,8 +76,8 @@ class Agent:
 
     def run(self, task, context="", enable_web_search=False):
         return self.client.chat(
-            self.instructions,
-            f"Task:\n{task}\n\nContext:\n{context or 'None'}",
+            LANGUAGE_GUIDANCE + "\\n\\n" + self.instructions,
+            f"Task:\\n{task}\\n\\nContext:\\n{context or 'None'}",
             enable_web_search=enable_web_search,
         )
 
@@ -125,18 +125,18 @@ class NovaOrchestrator:
             else:
                 self.progress("Research Agent is preparing a research brief…")
             out["research"] = self.researcher.run(
-                task, out["plan"] + "\n" + memory,
+                task, out["plan"] + "\\n" + memory,
                 enable_web_search=enable_web_search,
             )
         if any(word in lower for word in ("code", "software", "program", "develop", "build")):
             self.progress("Coding Agent is working…")
-            out["coding"] = self.coder.run(task, out["plan"] + "\n" + memory)
+            out["coding"] = self.coder.run(task, out["plan"] + "\\n" + memory)
         self.progress("Analyst is preparing the response…")
         out["analysis"] = self.analyst.run(
-            task, "\n\n".join(f"{k}:\n{v}" for k, v in out.items())
+            task, "\\n\\n".join(f"{k}:\\n{v}" for k, v in out.items())
         )
         self.progress("Reviewer is checking the result…")
         out["final"] = self.reviewer.run(
-            task, "\n\n".join(f"{k}:\n{v}" for k, v in out.items())
+            task, "\\n\\n".join(f"{k}:\\n{v}" for k, v in out.items())
         )
         return out
