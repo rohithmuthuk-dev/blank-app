@@ -35,8 +35,8 @@ def secret(key,default=""):
 st.markdown('<div class="nova-hero"><h1>🤖 NOVA AI</h1><b>Autonomous Multi-Agent Assistant</b><p>One task. Specialist agents. One reviewed result.</p></div>',unsafe_allow_html=True)
 with st.sidebar:
     st.subheader("AI provider")
-    st.caption("Add credentials in Streamlit app Settings → Secrets. Never commit API keys.")
-    st.code('AI_API_KEY = "your-key"\nAI_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"\nAI_MODEL = "glm-4.5-flash"',language="toml")
+    st.caption("Provider: OpenRouter. Add your key in Streamlit app Settings → Secrets. Never commit API keys.")
+    st.code('OPENROUTER_API_KEY = "your-openrouter-key"\nAI_BASE_URL = "https://openrouter.ai/api/v1"\nAI_MODEL = "openrouter/free"',language="toml")
     if st.button("Clear saved memory"):
         with db() as c: c.execute("DELETE FROM conversations")
         st.success("Memory cleared."); st.rerun()
@@ -44,7 +44,7 @@ with st.sidebar:
 st.subheader("Give NOVA a task")
 task=st.text_area("Task",placeholder="Example: Research a topic, compare options, or design and write a small app.",height=130,label_visibility="collapsed")
 if st.button("🚀 Run agent team",type="primary",disabled=not task.strip()):
-    client=AIClient(api_key=secret("AI_API_KEY"),base_url=secret("AI_BASE_URL") or None,model=secret("AI_MODEL") or None)
+    client=AIClient(api_key=secret("OPENROUTER_API_KEY") or secret("AI_API_KEY"),base_url=secret("AI_BASE_URL") or None,model=secret("AI_MODEL") or None)
     status=st.status("NOVA is starting…",expanded=True)
     try:
         def progress(msg): status.write(msg)
