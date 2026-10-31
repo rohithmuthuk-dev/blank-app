@@ -76,8 +76,8 @@ class Agent:
 
     def run(self, task, context="", enable_web_search=False):
         return self.client.chat(
-            LANGUAGE_GUIDANCE + "\\n\\n" + self.instructions,
-            f"Task:\\n{task}\\n\\nContext:\\n{context or 'None'}",
+            LANGUAGE_GUIDANCE + "\n\n" + self.instructions,
+            f"Task:\n{task}\n\nContext:\n{context or 'None'}",
             enable_web_search=enable_web_search,
         )
 
@@ -125,18 +125,18 @@ class NovaOrchestrator:
             else:
                 self.progress("Research Agent is preparing a research brief…")
             out["research"] = self.researcher.run(
-                task, out["plan"] + "\\n" + memory,
+                task, out["plan"] + "\n" + memory,
                 enable_web_search=enable_web_search,
             )
         if any(word in lower for word in ("code", "software", "program", "develop", "build")):
             self.progress("Coding Agent is working…")
-            out["coding"] = self.coder.run(task, out["plan"] + "\\n" + memory)
+            out["coding"] = self.coder.run(task, out["plan"] + "\n" + memory)
         self.progress("Analyst is preparing the response…")
         out["analysis"] = self.analyst.run(
-            task, "\\n\\n".join(f"{k}:\\n{v}" for k, v in out.items())
+            task, "\n\n".join(f"{k}:\n{v}" for k, v in out.items())
         )
         self.progress("Reviewer is checking the result…")
         out["final"] = self.reviewer.run(
-            task, "\\n\\n".join(f"{k}:\\n{v}" for k, v in out.items())
+            task, "\n\n".join(f"{k}:\n{v}" for k, v in out.items())
         )
         return out
