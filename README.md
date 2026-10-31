@@ -5,6 +5,8 @@ NOVA is an Android-friendly Streamlit web app coordinating Planner, Researcher, 
 ## Included
 - Task planning and specialist delegation
 - OpenRouter API using the OpenAI-compatible chat-completions endpoint
+- Tamil and English typed instructions
+- Tamil voice recording and speech-to-text input (user-triggered)
 - Optional live web research using OpenRouter's `openrouter:web_search` server tool
 - Source links surfaced from OpenRouter citation annotations when returned
 - Reviewer pass before presenting results
@@ -26,6 +28,13 @@ AI_MODEL = "openrouter/free"
 
 Get an API key at https://openrouter.ai/keys. Check model pricing and account limits before use. Never share your key or commit it to GitHub.
 
+## Tamil voice input
+- Tap the microphone recorder, speak Tamil, then tap **Convert voice to text**.
+- Check or edit the transcript before tapping **Run agent team**.
+- Tamil is the default speech-recognition language; English (India) can be selected too. Tamil-English mixed speech is supported best when Tamil is the main language.
+- Speech-to-text uses the Google speech-recognition service through the SpeechRecognition library. Audio is sent to Google only after the user presses the conversion button. Do not record passwords or sensitive information. Recognition requires an internet connection and may be unavailable or rate-limited.
+- NOVA's agents are instructed to understand colloquial Tamil and mixed Tamil-English and reply in the language used by the user.
+
 ## Live web research
 - In NOVA's task screen, select **Enable live web research** before running a research task.
 - The Researcher sends the `openrouter:web_search` server tool with a maximum of 5 results per search and 10 total results per request.
@@ -43,4 +52,4 @@ Get an API key at https://openrouter.ai/keys. Check model pricing and account li
 ## Next milestones
 1. Add isolated code execution and real test reporting.
 2. Add approval-gated integrations and task automation.
-3. Add voice input/output and installable PWA support.
+3. Add voice output and installable PWA support.
