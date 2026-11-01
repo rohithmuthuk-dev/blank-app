@@ -57,7 +57,7 @@ with st.sidebar:
         'OPENROUTER_API_KEY = "your-openrouter-key"\nAI_BASE_URL = "https://openrouter.ai/api/v1"\nAI_MODEL = "openrouter/free"',
         language="toml",
     )
-    st.caption("Live web search uses OpenRouter's web-search tool and may incur extra usage charges.")
+    st.caption("Live web search uses OpenRouter and may incur extra charges. NOVA limits each task to at most 2 search calls.")
     if st.button("Clear saved memory"):
         with db() as c:
             c.execute("DELETE FROM conversations")
@@ -142,9 +142,9 @@ selected_agent_names = st.multiselect(
     help="Your selected agents work alongside Planner, Researcher, Coder, Analyst and Reviewer.",
 )
 enable_web_search = st.checkbox(
-    "🌐 Enable live web research (may incur extra OpenRouter charges)",
+    "🌐 Enable live web research (up to 2 searches; charges may apply)",
     value=False,
-    help="When selected, the Researcher can use OpenRouter web search and return source links. Leave off for ordinary tasks.",
+    help="When selected, the Researcher can make at most 2 web-search calls for this task and return source links. Search may incur extra OpenRouter charges. Leave off for ordinary tasks.",
 )
 if st.button("🚀 Run agent team", type="primary", disabled=not task.strip()):
     client = AIClient(
