@@ -34,8 +34,14 @@ class AIClient:
         if enable_web_search:
             payload["tools"] = [{
                 "type": "openrouter:web_search",
-                "parameters": {"max_results": 5, "max_total_results": 10},
+                "parameters": {
+                    "max_results": 5,
+                    "max_total_results": 10,
+                    "max_uses": 2,
+                },
             }]
+            # Hard-cap server-tool calls per request as an additional cost guard.
+            payload["max_tool_calls"] = 2
         try:
             response = requests.post(
                 self.base_url + "/chat/completions",
