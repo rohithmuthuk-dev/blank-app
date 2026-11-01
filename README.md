@@ -44,7 +44,8 @@ AI_MODEL = "openrouter/free"
 ## Live web research
 - Select **Enable live web research** before running a research task.
 - The Researcher can use OpenRouter's web-search server tool and return source links.
-- Search usage may incur separate charges in addition to model usage. OpenRouter's published Exa default pricing has been $0.007 per search request; check current pricing before use.
+- NOVA sets a hard limit of **2 search calls per task** and a maximum of 10 total results to help control usage.
+- Search usage may incur separate charges in addition to model usage. OpenRouter's default `auto` engine uses provider-native search when available and otherwise falls back to Exa; Exa currently lists $0.007 per request. Native provider pricing may differ. Check current pricing before use.
 - Search is off by default. No separate search-provider API key is required when the configured OpenRouter account/model supports the tool.
 
 ## Safety and limitations
