@@ -161,6 +161,11 @@ if st.button("🚀 Run agent team", type="primary", disabled=not task.strip()):
             task.strip(), memory(), enable_web_search=enable_web_search,
             custom_agents=chosen_agents,
         )
+        if enable_web_search:
+            result["web_search_usage"] = {
+                "reported": client.web_search_usage_reported,
+                "requests": client.web_search_requests_total,
+            }
         status.update(label="NOVA finished its review", state="complete", expanded=False)
         st.session_state["nova_results"] = result
         remember(task.strip(), result["final"])
@@ -176,9 +181,19 @@ if st.session_state.get("nova_results"):
     st.divider()
     st.subheader("✨ Final answer")
     st.markdown(result["final"])
+    search_usage = result.get("web_search_usage")
+    if search_usage:
+        if search_usage["reported"]:
+            st.caption(
+                f"Live web-search requests used: {search_usage['requests']} (maximum 2 for this task)."
+            )
+        else:
+            st.caption(
+                "OpenRouter did not return a web-search usage count. Check your OpenRouter activity for billing details."
+            )
     with st.expander("See agent activity"):
         for key, value in result.items():
-            if key != "final":
+            if key not in ("final", "web_search_usage"):
                 label = key.replace("custom_", "").replace("_", " ").title()
                 st.markdown(f"**{label} Agent**")
                 st.markdown(value)
