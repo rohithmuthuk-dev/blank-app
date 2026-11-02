@@ -18,6 +18,8 @@ class AIClient:
         self.api_key = api_key or os.getenv("AI_API_KEY", "")
         self.base_url = (base_url or os.getenv("AI_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
         self.model = model or os.getenv("AI_MODEL", DEFAULT_MODEL)
+        self.web_search_requests_total = 0
+        self.web_search_usage_reported = False
 
     def chat(self, system: str, user: str, temperature: float = 0.4,
              enable_web_search: bool = False) -> str:
@@ -41,7 +43,10 @@ class AIClient:
                 },
             }]
             # Hard-cap server-tool calls per request as an additional cost guard.
-            payload["max_tool_calls"] = 2
+            payload["stop_server_tools_when"] = [{
+                "type": "step_count_is",
+                "step_count": 2,
+            }]
         try:
             response = requests.post(
                 self.base_url + "/chat/completions",
@@ -55,7 +60,18 @@ class AIClient:
                 timeout=120,
             )
             response.raise_for_status()
-            message = response.json()["choices"][0]["message"]
+            response_data = response.json()
+            usage = response_data.get("usage")
+            if isinstance(usage, dict):
+                server_tool_use = usage.get("server_tool_use")
+                if isinstance(server_tool_use, dict) and "web_search_requests" in server_tool_use:
+                    self.web_search_usage_reported = True
+                    try:
+                        used = int(server_tool_use["web_search_requests"])
+                    except (TypeError, ValueError):
+                        used = 0
+                    self.web_search_requests_total += max(0, used)
+            message = response_data["choices"][0]["message"]
             content = (message.get("content") or "").strip()
             citations = []
             for item in message.get("annotations") or []:
