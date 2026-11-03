@@ -44,6 +44,8 @@ AI_MODEL = "openrouter/free"
 ## Live web research
 - Select **Enable live web research** before running a research task.
 - The Researcher can use OpenRouter's web-search server tool and return source links.
+- Only citations with valid HTTP/HTTPS URLs and a hostname are rendered; unsafe URL schemes and link-breaking citation titles are rejected or escaped.
+- Offline regression tests run automatically on pushes and pull requests through GitHub Actions. Run locally with `python -m unittest discover -s tests -v`.
 - NOVA uses OpenRouter's `stop_server_tools_when` condition to stop after **2 server-tool steps per task**, and sets `max_uses: 2` plus a maximum of 10 total results. The current request exposes only web search as a server tool, so this caps search calls.
 - When OpenRouter returns `usage.server_tool_use.web_search_requests`, NOVA displays the actual search count. If the usage field is absent, it says so rather than assuming zero; check OpenRouter activity for billing details.
 - Search usage may incur separate charges in addition to model usage. OpenRouter's default `auto` engine uses provider-native search when available and otherwise falls back to Exa; Exa currently lists $0.007 per request. Native provider pricing may differ. Check current pricing before use.
