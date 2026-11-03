@@ -103,17 +103,8 @@ class AIClient:
                 title = str(citation.get("title") or url)
                 title = html.escape(title, quote=False).replace("\\", "\\\\")
                 title = title.replace("[", "\\[").replace("]", "\\]")
-                title = title.replace("\\r", " ").replace("\\n", " ")
-                safe_url = quote(url, safe=":/?#[]@!            for item in message.get("annotations") or []:
-                citation = item.get("url_citation") or {}
-                url = citation.get("url")
-                title = citation.get("title") or url
-                if url and url not in [entry[1] for entry in citations]:
-                    citations.append((title, url))
-            if citations:
-                content += "\n\n**Web sources**\n" + "\n".join(
-                    f"- [{title}]({url})" for title, url in citations
-                )'()*+,;=%-._~")
+                title = title.replace("\r", " ").replace("\n", " ")
+                safe_url = quote(url, safe=":/?#[]@!$&'()*+,;=%-._~")
                 if safe_url not in [entry[1] for entry in citations]:
                     citations.append((title, safe_url))
             if citations:
