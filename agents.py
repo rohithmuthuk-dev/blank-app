@@ -1,9 +1,11 @@
 """NOVA specialist-agent orchestration using OpenRouter's API."""
 from __future__ import annotations
+import html
 import os
 import re
 import requests
 from typing import Callable
+from urllib.parse import quote, urlsplit
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "openrouter/free"
@@ -75,6 +77,34 @@ class AIClient:
             content = (message.get("content") or "").strip()
             citations = []
             for item in message.get("annotations") or []:
+                if not isinstance(item, dict):
+                    continue
+                citation = item.get("url_citation") or {}
+                if not isinstance(citation, dict):
+                    continue
+                url = citation.get("url")
+                if not isinstance(url, str):
+                    continue
+                url = url.strip()
+                if not url or any(ord(char) < 32 for char in url):
+                    continue
+                try:
+                    parsed_url = urlsplit(url)
+                    hostname = parsed_url.hostname
+                except ValueError:
+                    continue
+                if (
+                    parsed_url.scheme.lower() not in ("http", "https")
+                    or not hostname
+                    or parsed_url.username
+                    or parsed_url.password
+                ):
+                    continue
+                title = str(citation.get("title") or url)
+                title = html.escape(title, quote=False).replace("\\", "\\\\")
+                title = title.replace("[", "\\[").replace("]", "\\]")
+                title = title.replace("\\r", " ").replace("\\n", " ")
+                safe_url = quote(url, safe=":/?#[]@!            for item in message.get("annotations") or []:
                 citation = item.get("url_citation") or {}
                 url = citation.get("url")
                 title = citation.get("title") or url
@@ -83,6 +113,12 @@ class AIClient:
             if citations:
                 content += "\n\n**Web sources**\n" + "\n".join(
                     f"- [{title}]({url})" for title, url in citations
+                )'()*+,;=%-._~")
+                if safe_url not in [entry[1] for entry in citations]:
+                    citations.append((title, safe_url))
+            if citations:
+                content += "\n\n**Web sources**\n" + "\n".join(
+                    f"- [{title}](<{url}>)" for title, url in citations
                 )
             if not content:
                 raise AIProviderError("OpenRouter returned an empty response.")
