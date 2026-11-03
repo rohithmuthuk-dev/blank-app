@@ -86,7 +86,7 @@ class AIClientWebSearchTests(unittest.TestCase):
             }],
         })
         answer = self.client.chat("system", "research")
-        self.assertIn(r"Bad \\]", answer)
+        self.assertIn(r"Bad \]", answer)
         self.assertIn("](<https://example.com/article>)", answer)
 
     @patch("agents.requests.post")
