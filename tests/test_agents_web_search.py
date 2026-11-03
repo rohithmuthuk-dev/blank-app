@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from agents import AIClient, AIProviderError
+from agents import AIClient, AIProviderError, NovaOrchestrator
 
 
 class FakeResponse:
@@ -58,6 +58,37 @@ class AIClientWebSearchTests(unittest.TestCase):
         answer = self.client.chat("system", "research")
         self.assertIn("[Example article](https://example.com/article)", answer)
 
+
+    @patch("agents.requests.post")
+    def test_non_http_citations_are_ignored(self, post):
+        post.return_value = FakeResponse({
+            "content": "A sourced answer.",
+            "annotations": [
+                {"url_citation": {"url": "javascript:alert(1)", "title": "Unsafe"}},
+                {"url_citation": {"url": "data:text/html,hello", "title": "Data URL"}},
+                {"url_citation": {"url": "https://safe.example/article", "title": "Safe"}},
+            ],
+        })
+        answer = self.client.chat("system", "research")
+        self.assertIn("https://safe.example/article", answer)
+        self.assertNotIn("javascript:", answer)
+        self.assertNotIn("data:text/html", answer)
+
+    @patch("agents.requests.post")
+    def test_citation_title_cannot_break_markdown_link(self, post):
+        post.return_value = FakeResponse({
+            "content": "A sourced answer.",
+            "annotations": [{
+                "url_citation": {
+                    "url": "https://example.com/article",
+                    "title": "Bad ](https://attacker.example)",
+                },
+            }],
+        })
+        answer = self.client.chat("system", "research")
+        self.assertIn(r"Bad \\]", answer)
+        self.assertIn("](<https://example.com/article>)", answer)
+
     @patch("agents.requests.post")
     def test_server_tool_usage_is_recorded(self, post):
         post.return_value = FakeResponse(
@@ -78,6 +109,44 @@ class AIClientWebSearchTests(unittest.TestCase):
         client = AIClient(api_key="")
         with self.assertRaises(AIProviderError):
             client.chat("system", "hello")
+
+
+
+class NovaOrchestratorWebSearchTests(unittest.TestCase):
+    class FakeClient:
+        def __init__(self):
+            self.calls = []
+            self.responses = [
+                "Plan: research this topic and cite sources.",
+                "Research findings.",
+                "Analysis.",
+                "Reviewed final answer.",
+            ]
+
+        def chat(self, system, user, temperature=0.4, enable_web_search=False):
+            self.calls.append({
+                "system": system,
+                "enable_web_search": enable_web_search,
+            })
+            return self.responses[len(self.calls) - 1]
+
+    def test_only_researcher_receives_web_search_tool(self):
+        client = self.FakeClient()
+        result = NovaOrchestrator(client).run(
+            "Research this topic", enable_web_search=True
+        )
+        self.assertEqual(result["final"], "Reviewed final answer.")
+        self.assertEqual(
+            [call["enable_web_search"] for call in client.calls],
+            [False, True, False, False],
+        )
+        self.assertIn("You are NOVA Researcher", client.calls[1]["system"])
+
+    def test_researcher_has_no_web_search_when_toggle_is_off(self):
+        client = self.FakeClient()
+        NovaOrchestrator(client).run("Research this topic", enable_web_search=False)
+        self.assertTrue(client.calls)
+        self.assertTrue(all(not call["enable_web_search"] for call in client.calls))
 
 
 if __name__ == "__main__":
