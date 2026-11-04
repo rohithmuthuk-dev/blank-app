@@ -169,8 +169,8 @@ if st.button("🚀 Run agent team", type="primary", disabled=not task.strip()):
     provider = "meta" if meta_key else "openrouter"
     client = AIClient(
         api_key=meta_key if provider == "meta" else openrouter_key,
-        base_url=secret("AI_BASE_URL") or None,
-        model=secret("AI_MODEL") or ("muse-spark-1.3" if provider == "meta" else "openrouter/free"),
+        base_url=(secret("META_BASE_URL") or "https://api.meta.ai/v1") if provider == "meta" else (secret("AI_BASE_URL") or None),
+        model=(secret("META_MODEL") or "muse-spark-1.3") if provider == "meta" else (secret("AI_MODEL") or "openrouter/free"),
         provider=provider,
     )
     status = st.status("NOVA is starting…", expanded=True)
