@@ -23,8 +23,10 @@ class AIClient:
         self.api_key = api_key or meta_key or os.getenv("OPENROUTER_API_KEY") or os.getenv("AI_API_KEY", "")
         default_base = "https://api.meta.ai/v1" if self.provider == "meta" else DEFAULT_BASE_URL
         default_model = "muse-spark-1.3" if self.provider == "meta" else DEFAULT_MODEL
-        self.base_url = (base_url or os.getenv("AI_BASE_URL") or default_base).rstrip("/")
-        self.model = model or os.getenv("AI_MODEL") or default_model
+        env_base = os.getenv("META_BASE_URL") if self.provider == "meta" else os.getenv("AI_BASE_URL")
+        env_model = os.getenv("META_MODEL") if self.provider == "meta" else os.getenv("AI_MODEL")
+        self.base_url = (base_url or env_base or default_base).rstrip("/")
+        self.model = model or env_model or default_model
         self.web_search_requests_total = 0
         self.web_search_usage_reported = False
 
@@ -76,6 +78,14 @@ class AIClient:
 '()*+,;=%-._~")
                         if safe_url not in [entry[1] for entry in citations]:
                             citations.append((title, safe_url))
+            if not content:
+                text_blocks = []
+                for item in data.get("output") or []:
+                    if isinstance(item, dict) and item.get("type") == "message":
+                        for block in item.get("content") or []:
+                            if isinstance(block, dict) and block.get("type") in ("output_text", "text"):
+                                text_blocks.append(str(block.get("text") or ""))
+                content = "\\n".join(text_blocks).strip()
             if searched:
                 self.web_search_usage_reported = True
                 self.web_search_requests_total += 1
