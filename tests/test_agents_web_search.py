@@ -29,17 +29,15 @@ class AIClientWebSearchTests(unittest.TestCase):
         self.client.chat("system", "hello")
         payload = post.call_args.kwargs["json"]
         self.assertNotIn("tools", payload)
-        self.assertNotIn("stop_server_tools_when", payload)
+        self.assertNotIn("max_tool_calls", payload)
 
     @patch("agents.requests.post")
     def test_web_search_has_a_two_call_limit(self, post):
         post.return_value = FakeResponse({"content": "Research result"})
         self.client.chat("system", "research this", enable_web_search=True)
         payload = post.call_args.kwargs["json"]
-        self.assertEqual(
-            payload["stop_server_tools_when"],
-            [{"type": "step_count_is", "step_count": 2}],
-        )
+        self.assertEqual(payload["max_tool_calls"], 2)
+        self.assertNotIn("stop_server_tools_when", payload)
         self.assertEqual(payload["tools"][0]["parameters"]["max_uses"], 2)
         self.assertEqual(payload["tools"][0]["parameters"]["max_total_results"], 10)
 
@@ -93,11 +91,30 @@ class AIClientWebSearchTests(unittest.TestCase):
     def test_server_tool_usage_is_recorded(self, post):
         post.return_value = FakeResponse(
             {"content": "Searched answer"},
-            usage={"server_tool_use": {"web_search_requests": 2}},
+            usage={"server_tool_use_details": {"web_search_requests": 2}},
         )
         self.client.chat("system", "research", enable_web_search=True)
         self.assertTrue(self.client.web_search_usage_reported)
         self.assertEqual(self.client.web_search_requests_total, 2)
+
+    @patch("agents.requests.post")
+    def test_legacy_server_tool_usage_field_is_supported(self, post):
+        post.return_value = FakeResponse(
+            {"content": "Searched answer"},
+            usage={"server_tool_use": {"web_search_requests": 1}},
+        )
+        self.client.chat("system", "research", enable_web_search=True)
+        self.assertTrue(self.client.web_search_usage_reported)
+        self.assertEqual(self.client.web_search_requests_total, 1)
+
+    @patch("agents.requests.post")
+    def test_invalid_server_tool_usage_is_not_reported_as_zero(self, post):
+        post.return_value = FakeResponse(
+            {"content": "Searched answer"},
+            usage={"server_tool_use_details": {"web_search_requests": "unknown"}},
+        )
+        self.client.chat("system", "research", enable_web_search=True)
+        self.assertFalse(self.client.web_search_usage_reported)
 
     @patch("agents.requests.post")
     def test_missing_server_tool_usage_is_not_reported_as_zero(self, post):
