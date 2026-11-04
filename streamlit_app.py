@@ -6,9 +6,10 @@ from pathlib import Path
 import speech_recognition as sr
 import streamlit as st
 from agents import AIClient, AIProviderError, NovaOrchestrator
+from electrical_domain import EQUIPMENT, DELIVERABLES, build_workbench_prompt
 
 DB_PATH = Path("nova_memory.db")
-st.set_page_config(page_title="NOVA AI", page_icon="🤖", layout="centered")
+st.set_page_config(page_title="NOVA Electrical AI", page_icon="⚡", layout="centered")
 st.markdown("""<style>
 .block-container{max-width:900px;padding-top:1.3rem;padding-bottom:3rem}
 .nova-hero{padding:1.2rem;border:1px solid rgba(128,128,128,.3);border-radius:18px;margin-bottom:1rem}
@@ -47,17 +48,17 @@ def secret(key, default=""):
         return default
 
 st.markdown(
-    '<div class="nova-hero"><h1>🤖 NOVA AI</h1><b>Autonomous Multi-Agent Assistant</b><p>JARVIS-inspired assistant · Tamil + English · Specialist agents</p></div>',
+    '<div class="nova-hero"><h1>⚡ NOVA Electrical AI</h1><b>AI-Powered Testing & Commissioning Assistant</b><p>Substations · Protection systems · IEC-aware guidance · Tamil + English</p></div>',
     unsafe_allow_html=True,
 )
 with st.sidebar:
     st.subheader("AI provider")
-    st.caption("Provider: OpenRouter. Add your key in Streamlit app Settings → Secrets. Never commit API keys.")
+    st.caption("Meta Model API is preferred for the hackathon. Add keys in Streamlit Settings → Secrets. Never commit API keys.")
     st.code(
-        'OPENROUTER_API_KEY = "your-openrouter-key"\nAI_BASE_URL = "https://openrouter.ai/api/v1"\nAI_MODEL = "openrouter/free"',
+        'MODEL_API_KEY = "your-meta-model-api-key"\n# Optional fallback\nOPENROUTER_API_KEY = "your-openrouter-key"',
         language="toml",
     )
-    st.caption("Live research uses at most 2 web searches and 1 source-page fetch per task. Search may incur charges; fetched content adds model-token usage.")
+    st.caption("When MODEL_API_KEY is present, NOVA uses Meta Muse Spark 1.3. Otherwise it uses your OpenRouter configuration. Live research uses the selected provider's supported search tool.")
     if st.button("Clear saved memory"):
         with db() as c:
             c.execute("DELETE FROM conversations")
@@ -101,6 +102,22 @@ with st.expander("Open Agent Builder", expanded=False):
     else:
         st.info("No custom agents yet. Create your first specialist above.")
 
+st.subheader("⚡ Electrical Testing Workbench")
+st.caption("Create a structured engineering request, or ask NOVA anything in Tamil or English below.")
+wb1, wb2 = st.columns(2)
+with wb1:
+    wb_equipment = st.selectbox("Equipment", EQUIPMENT)
+    wb_deliverable = st.selectbox("What do you need?", DELIVERABLES)
+    wb_voltage = st.text_input("Voltage class", placeholder="e.g. 220 kV / 33 kV / 11 kV")
+with wb2:
+    wb_stage = st.selectbox("Work stage", ["Site testing / commissioning", "Factory acceptance test (FAT)", "Site acceptance test (SAT)", "Maintenance / troubleshooting", "Design / document review", "Not specified"])
+    wb_make = st.text_input("Manufacturer / model", placeholder="e.g. Siemens / ABB / Schneider / nameplate")
+    wb_details = st.text_input("Project details", placeholder="Test set, relay model, symptoms, document edition…")
+if st.button("Build engineering brief"):
+    st.session_state["task_input"] = build_workbench_prompt(
+        wb_equipment, wb_deliverable, wb_stage, wb_voltage, wb_make, wb_details
+    )
+    st.success("Engineering brief added below. Review it and press Run agent team.")
 st.subheader("Give NOVA a task")
 st.caption("Type in Tamil or English, or record your Tamil voice. NOVA will reply in the language you use.")
 recording = st.audio_input("🎙️ Record your instruction", sample_rate=16000)
@@ -147,10 +164,14 @@ enable_web_search = st.checkbox(
     help="When selected, the Researcher can make at most 2 web searches and fetch 1 source page. Search may incur OpenRouter charges; fetched content adds model-token usage. Leave off for ordinary tasks.",
 )
 if st.button("🚀 Run agent team", type="primary", disabled=not task.strip()):
+    meta_key = secret("MODEL_API_KEY")
+    openrouter_key = secret("OPENROUTER_API_KEY") or secret("AI_API_KEY")
+    provider = "meta" if meta_key else "openrouter"
     client = AIClient(
-        api_key=secret("OPENROUTER_API_KEY") or secret("AI_API_KEY"),
+        api_key=meta_key if provider == "meta" else openrouter_key,
         base_url=secret("AI_BASE_URL") or None,
-        model=secret("AI_MODEL") or None,
+        model=secret("AI_MODEL") or ("muse-spark-1.3" if provider == "meta" else "openrouter/free"),
+        provider=provider,
     )
     status = st.status("NOVA is starting…", expanded=True)
     try:
@@ -198,4 +219,4 @@ if st.session_state.get("nova_results"):
                 st.markdown(f"**{label} Agent**")
                 st.markdown(value)
 st.divider()
-st.caption("NOVA AI early build · JARVIS Android-wide control and floating 3D character require a native Android companion app. External, sensitive, paid or destructive actions must be approved.")
+st.caption("NOVA Electrical AI prototype · Decision support only. Verify every test method and acceptance criterion against the approved IEC edition, manufacturer manual, project specification and utility requirements. Never use AI output as switching authority or a substitute for an approved method statement.")
