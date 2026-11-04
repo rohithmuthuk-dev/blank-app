@@ -43,12 +43,12 @@ AI_MODEL = "openrouter/free"
 
 ## Live web research
 - Select **Enable live web research** before running a research task.
-- The Researcher can use OpenRouter's web-search server tool and return source links.
+- The Researcher can use OpenRouter's web-search server tool and return source links. For deeper checking, it can also fetch up to one source page per task.
 - Only citations with valid HTTP/HTTPS URLs and a hostname are rendered; unsafe URL schemes and link-breaking citation titles are rejected or escaped.
 - Offline regression tests run automatically on pushes and pull requests through GitHub Actions. Run locally with `python -m unittest discover -s tests -v`.
-- NOVA sets both the web-search tool's `max_uses: 2` and the top-level `max_tool_calls: 2`. Since web search is the only server tool attached to the Researcher request, these limits cap it at **2 search calls per task**, with a maximum of 10 total results.
+- NOVA sets web search `max_uses: 2`, web fetch `max_uses: 1`, and top-level `max_tool_calls: 3`. This caps each Researcher request at **2 searches plus 1 source-page fetch**, with a maximum of 10 search results. Web fetch uses OpenRouter's direct `openrouter` engine, which is listed as free; fetched text still adds model-token usage.
 - When OpenRouter returns `usage.server_tool_use_details.web_search_requests` (or the older `usage.server_tool_use.web_search_requests` field), NOVA displays the actual search count. Invalid or missing usage values are not shown as zero. If the usage field is absent, it says so rather than assuming zero; check OpenRouter activity for billing details.
-- Search usage may incur separate charges in addition to model usage. OpenRouter's default `auto` engine uses provider-native search when available and otherwise falls back to Exa; Exa currently lists $0.007 per request. Native provider pricing may differ. Check current pricing before use.
+- Search usage may incur separate charges in addition to model usage. OpenRouter's default `auto` search engine uses provider-native search when available and otherwise falls back to Exa; Exa currently lists $0.007 per request. Native provider pricing may differ. The optional direct OpenRouter fetch engine is listed as free, but fetched content still increases model-token usage. Check current pricing before use.
 - Search is off by default. No separate search-provider API key is required when the configured OpenRouter account/model supports the tool.
 
 ## Safety and limitations
