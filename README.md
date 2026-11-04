@@ -10,6 +10,8 @@ NOVA helps engineers prepare test procedures, FAT/SAT plans, commissioning check
 - OpenRouter remains available as a fallback provider.
 - Tamil, colloquial Tamil-English and English instructions.
 - Electrical workbench for equipment, deliverable, work stage, voltage class, manufacturer/model and project details.
+- Optional text-based PDF reference upload (up to 3 files, 25 pages and 12,000 extracted characters per file) with filename/page context.
+- Downloadable Markdown draft test reports and technical answers.
 - Multi-agent Planner, Researcher, Coder, Analyst and Reviewer workflow.
 - Optional live web search with source citations (Meta Responses API search grounding or OpenRouter web search).
 - User-triggered Tamil/English voice transcription.
