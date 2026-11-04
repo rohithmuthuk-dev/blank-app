@@ -46,8 +46,8 @@ AI_MODEL = "openrouter/free"
 - The Researcher can use OpenRouter's web-search server tool and return source links.
 - Only citations with valid HTTP/HTTPS URLs and a hostname are rendered; unsafe URL schemes and link-breaking citation titles are rejected or escaped.
 - Offline regression tests run automatically on pushes and pull requests through GitHub Actions. Run locally with `python -m unittest discover -s tests -v`.
-- NOVA uses OpenRouter's `stop_server_tools_when` condition to stop after **2 server-tool steps per task**, and sets `max_uses: 2` plus a maximum of 10 total results. The current request exposes only web search as a server tool, so this caps search calls.
-- When OpenRouter returns `usage.server_tool_use.web_search_requests`, NOVA displays the actual search count. If the usage field is absent, it says so rather than assuming zero; check OpenRouter activity for billing details.
+- NOVA sets both the web-search tool's `max_uses: 2` and the top-level `max_tool_calls: 2`. Since web search is the only server tool attached to the Researcher request, these limits cap it at **2 search calls per task**, with a maximum of 10 total results.
+- When OpenRouter returns `usage.server_tool_use_details.web_search_requests` (or the older `usage.server_tool_use.web_search_requests` field), NOVA displays the actual search count. Invalid or missing usage values are not shown as zero. If the usage field is absent, it says so rather than assuming zero; check OpenRouter activity for billing details.
 - Search usage may incur separate charges in addition to model usage. OpenRouter's default `auto` engine uses provider-native search when available and otherwise falls back to Exa; Exa currently lists $0.007 per request. Native provider pricing may differ. Check current pricing before use.
 - Search is off by default. No separate search-provider API key is required when the configured OpenRouter account/model supports the tool.
 
