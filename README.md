@@ -1,66 +1,65 @@
-# NOVA AI — JARVIS-inspired Multi-Agent Assistant
+# NOVA Electrical AI
 
-NOVA is an Android-friendly Streamlit assistant that brings the AI brain and specialist-agent workflow from the JARVIS prototype into one app. It is designed for Tamil and English instructions and can be used from an Android browser.
+**AI-Powered Electrical Testing & Commissioning Assistant** for substation engineers.
 
-## Current features
-- Planner, Researcher, Coder, Analyst and Reviewer agents working as a team.
-- Tamil, colloquial Tamil-English and English task instructions.
-- User-triggered voice recording and speech-to-text for Tamil or English (India).
-- Persistent custom specialist-agent profiles created with the Agent Builder.
-- Recent conversation memory stored in local SQLite.
-- Optional live web research using OpenRouter's `openrouter:web_search` tool, with source links.
-- OpenRouter-compatible model configuration; existing API key configuration is preserved.
+NOVA helps engineers prepare test procedures, FAT/SAT plans, commissioning checklists, troubleshooting briefs and draft test reports for CTs, VTs, VCBs, SF6 circuit breakers, transformers, protection relays, cables, busbars and AIS/GIS substations.
 
-## Use it
-1. Open the Streamlit app.
-2. Type a task or record your voice, then convert and review the transcript.
-3. Optionally select one or more custom agents.
-4. Optionally enable live web research (additional charges may apply).
-5. Run the agent team and review the final answer and agent activity.
+## Hackathon build
 
-## Create a specialist agent
-Open **Build your own AI agent → Open Agent Builder**. Give the agent a name and clear role instructions, then save it. Select that agent under **Choose specialist agents for this task** when running a task. Custom agents are additional specialists; the standard Planner, Researcher, Coder, Analyst and Reviewer remain active.
+- Meta Model API (Muse Spark 1.3) integration using the official OpenAI-compatible Responses API.
+- OpenRouter remains available as a fallback provider.
+- Tamil, colloquial Tamil-English and English instructions.
+- Electrical workbench for equipment, deliverable, work stage, voltage class, manufacturer/model and project details.
+- Multi-agent Planner, Researcher, Coder, Analyst and Reviewer workflow.
+- Optional live web search with source citations (Meta Responses API search grounding or OpenRouter web search).
+- User-triggered Tamil/English voice transcription.
+- Custom specialist-agent builder and local SQLite conversation memory.
+- Responsive Streamlit interface usable from an Android browser.
 
-Examples:
-- Electrical Testing Engineer — explain CT/PT/VCB/transformer tests, test methods and relevant IEC standards; never invent measured results.
-- Android Helper — explain Android settings and app workflows; do not claim to control the phone from this web app.
-- App Developer — design and review application code; state clearly when code has not been executed.
-- Personal Assistant — organize tasks and prepare drafts; ask for approval before external actions.
+## Run
 
-## OpenRouter setup
-Add secrets in Streamlit app Settings → Secrets. Never put keys in source code or commit them:
+```bash
+pip install -r requirements.txt
+streamlit run streamlit_app.py
+```
+
+## Configure API credentials
+
+In Streamlit app Settings → Secrets, add the Meta key received from the Meta Model API dashboard:
+
+```toml
+MODEL_API_KEY = "your-meta-model-api-key"
+# Optional provider overrides
+META_BASE_URL = "https://api.meta.ai/v1"
+META_MODEL = "muse-spark-1.3"
+```
+
+NOVA prefers Meta Model API whenever `MODEL_API_KEY` is configured. To use OpenRouter instead, omit `MODEL_API_KEY` and configure:
+
 ```toml
 OPENROUTER_API_KEY = "your-openrouter-key"
 AI_BASE_URL = "https://openrouter.ai/api/v1"
 AI_MODEL = "openrouter/free"
 ```
 
-## Voice and privacy
-- Speech recognition runs only after the user presses **Convert voice to text**.
-- The recording is sent to Google's speech-recognition service through SpeechRecognition.
-- An internet connection is required; recognition may be unavailable or rate-limited.
-- Do not record passwords or sensitive information. Review the transcript before running the task.
+Never commit API keys. The hackathon credit announcement says each participant must claim their own credits; check the Meta dashboard Billing page and ensure the credits are applied before making API calls. The announcement also says a payment card must be on the account to make calls. Set a spend notification if desired.
 
-## Live web research
-- Select **Enable live web research** before running a research task.
-- The Researcher can use OpenRouter's web-search server tool and return source links. For deeper checking, it can also fetch up to one source page per task.
-- Only citations with valid HTTP/HTTPS URLs and a hostname are rendered; unsafe URL schemes and link-breaking citation titles are rejected or escaped.
-- Offline regression tests run automatically on pushes and pull requests through GitHub Actions. Run locally with `python -m unittest discover -s tests -v`.
-- NOVA sets web search `max_uses: 2`, web fetch `max_uses: 1`, and top-level `max_tool_calls: 3`. This caps each Researcher request at **2 searches plus 1 source-page fetch**, with a maximum of 10 search results. Web fetch uses OpenRouter's direct `openrouter` engine, which is listed as free; fetched text still adds model-token usage.
-- When OpenRouter returns `usage.server_tool_use_details.web_search_requests` (or the older `usage.server_tool_use.web_search_requests` field), NOVA displays the actual search count. Invalid or missing usage values are not shown as zero. If the usage field is absent, it says so rather than assuming zero; check OpenRouter activity for billing details.
-- Search usage may incur separate charges in addition to model usage. OpenRouter's default `auto` search engine uses provider-native search when available and otherwise falls back to Exa; Exa currently lists $0.007 per request. Native provider pricing may differ. The optional direct OpenRouter fetch engine is listed as free, but fetched content still increases model-token usage. Check current pricing before use.
-- Search is off by default. No separate search-provider API key is required when the configured OpenRouter account/model supports the tool.
+## Safety and standards integrity
 
-## Safety and limitations
-- NOVA can plan tasks, generate code and prepare action instructions. This Streamlit version does not execute arbitrary shell commands, install APKs, control Android apps, tap the screen, send messages, make calls, or change device settings.
-- The JARVIS prototype's floating overlay, animated 3D robot, native Android speech/TTS, app launching and Accessibility-based screen interaction belong in a separate native Android companion app. A web page cannot obtain those Android-wide privileges.
-- Never automate OTPs, banking, payments, account changes or other sensitive actions without explicit user confirmation and supported native integrations.
-- Retrieved webpages are untrusted input; agents are instructed not to follow instructions embedded in them.
-- AI-generated code and advice must be reviewed. NOVA does not claim tests were run unless they actually were.
-- Conversation memory and custom agent profiles use SQLite on the app's local filesystem. Hosting-platform restarts or storage policies may affect persistence.
+NOVA is engineering decision support, not switching authority or a substitute for an approved method statement. It must not invent IEC clauses, editions, numerical acceptance limits, relay settings, readings or pass/fail results. It distinguishes standard requirements, manufacturer instructions, project/utility specifications and common practice. Where the governing document is unavailable, acceptance criteria are marked **TBC — verify against approved project/manufacturer documents**.
 
-## Next milestones
-1. Add safe, isolated code execution and real test reporting.
-2. Add speech output and a chat-style conversation interface.
-3. Build the native Android companion: floating assistant, 3D character, native Tamil/English voice, foreground-service controls, and user-enabled Accessibility actions.
-4. Add approval-gated integrations for selected phone tasks.
+Always follow the approved permit-to-work, isolation, LOTO, prove-dead, discharge, temporary earthing and site safety procedures. Never open an energized CT secondary or short an energized VT secondary. Final procedures, settings and energization decisions require review by the authorized engineer.
+
+Generated test reports are drafts only. Users must enter actual measurements and verify them against approved documents. Voice transcription is sent to Google's speech-recognition service only after the user presses the transcription button; do not record sensitive information.
+
+## Validation
+
+```bash
+python -m unittest discover -s tests -v
+```
+
+GitHub Actions runs the offline regression suite on pushes and pull requests.
+
+## Current scope and next milestone
+
+This is a mobile-friendly web application, not yet a native Android APK. Native Android floating assistant, 3D avatar, background voice activation and device-wide actions are separate future work and are not claimed as implemented.
