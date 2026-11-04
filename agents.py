@@ -69,13 +69,7 @@ class AIClient:
                             continue
                         title = html.escape(str(citation.get("title") or url), quote=False)
                         title = title.replace("[", r"\[").replace("]", r"\]").replace("\n", " ")
-                        safe_url = quote(url.strip(), safe=":/?#[]@!    def __init__(self, api_key=None, base_url=None, model=None):
-        self.api_key = api_key or os.getenv("AI_API_KEY", "")
-        self.base_url = (base_url or os.getenv("AI_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
-        self.model = model or os.getenv("AI_MODEL", DEFAULT_MODEL)
-        self.web_search_requests_total = 0
-        self.web_search_usage_reported = False
-'()*+,;=%-._~")
+                        safe_url = quote(url.strip(), safe=":/?#[]@!()*+,;=%-._~")
                         if safe_url not in [entry[1] for entry in citations]:
                             citations.append((title, safe_url))
             if not content:
@@ -85,7 +79,7 @@ class AIClient:
                         for block in item.get("content") or []:
                             if isinstance(block, dict) and block.get("type") in ("output_text", "text"):
                                 text_blocks.append(str(block.get("text") or ""))
-                content = "\\n".join(text_blocks).strip()
+                content = "\n".join(text_blocks).strip()
             if searched:
                 self.web_search_usage_reported = True
                 self.web_search_requests_total += 1
