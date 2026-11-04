@@ -44,11 +44,9 @@ class AIClient:
                     "max_uses": 2,
                 },
             }]
-            # Hard-cap server-tool calls per request as an additional cost guard.
-            payload["stop_server_tools_when"] = [{
-                "type": "step_count_is",
-                "step_count": 2,
-            }]
+            # Only web search is exposed on this request, so this bounds total search calls.
+            # max_uses is the per-tool cap; max_tool_calls is OpenRouter's outer-loop cap.
+            payload["max_tool_calls"] = 2
         try:
             response = requests.post(
                 self.base_url + "/chat/completions",
@@ -65,14 +63,22 @@ class AIClient:
             response_data = response.json()
             usage = response_data.get("usage")
             if isinstance(usage, dict):
-                server_tool_use = usage.get("server_tool_use")
+                # OpenRouter's current documented field is server_tool_use_details.
+                # Keep the older field as a compatibility fallback for older responses.
+                server_tool_use = usage.get("server_tool_use_details")
+                if not isinstance(server_tool_use, dict):
+                    server_tool_use = usage.get("server_tool_use")
                 if isinstance(server_tool_use, dict) and "web_search_requests" in server_tool_use:
-                    self.web_search_usage_reported = True
+                    raw_used = server_tool_use["web_search_requests"]
                     try:
-                        used = int(server_tool_use["web_search_requests"])
+                        used = int(raw_used)
+                        if isinstance(raw_used, bool) or used < 0:
+                            raise ValueError("invalid web search usage count")
                     except (TypeError, ValueError):
-                        used = 0
-                    self.web_search_requests_total += max(0, used)
+                        pass
+                    else:
+                        self.web_search_usage_reported = True
+                        self.web_search_requests_total += used
             message = response_data["choices"][0]["message"]
             content = (message.get("content") or "").strip()
             citations = []
