@@ -36,10 +36,14 @@ class AIClientWebSearchTests(unittest.TestCase):
         post.return_value = FakeResponse({"content": "Research result"})
         self.client.chat("system", "research this", enable_web_search=True)
         payload = post.call_args.kwargs["json"]
-        self.assertEqual(payload["max_tool_calls"], 2)
+        self.assertEqual(payload["max_tool_calls"], 3)
         self.assertNotIn("stop_server_tools_when", payload)
         self.assertEqual(payload["tools"][0]["parameters"]["max_uses"], 2)
         self.assertEqual(payload["tools"][0]["parameters"]["max_total_results"], 10)
+        self.assertEqual(payload["tools"][1]["type"], "openrouter:web_fetch")
+        self.assertEqual(payload["tools"][1]["parameters"]["engine"], "openrouter")
+        self.assertEqual(payload["tools"][1]["parameters"]["max_uses"], 1)
+        self.assertEqual(payload["tools"][1]["parameters"]["max_content_tokens"], 6000)
 
     @patch("agents.requests.post")
     def test_url_citations_are_added_to_the_answer(self, post):
