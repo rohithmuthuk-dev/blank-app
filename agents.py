@@ -6,6 +6,7 @@ import re
 import requests
 from typing import Callable
 from urllib.parse import quote, urlsplit
+from electrical_domain import ELECTRICAL_ENGINEERING_GUIDANCE
 
 DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "openrouter/free"
@@ -16,17 +17,86 @@ class AIProviderError(RuntimeError):
     pass
 
 class AIClient:
-    def __init__(self, api_key=None, base_url=None, model=None):
+    def __init__(self, api_key=None, base_url=None, model=None, provider=None):
+        meta_key = os.getenv("MODEL_API_KEY", "")
+        self.provider = provider or ("meta" if meta_key else "openrouter")
+        self.api_key = api_key or meta_key or os.getenv("OPENROUTER_API_KEY") or os.getenv("AI_API_KEY", "")
+        default_base = "https://api.meta.ai/v1" if self.provider == "meta" else DEFAULT_BASE_URL
+        default_model = "muse-spark-1.3" if self.provider == "meta" else DEFAULT_MODEL
+        self.base_url = (base_url or os.getenv("AI_BASE_URL") or default_base).rstrip("/")
+        self.model = model or os.getenv("AI_MODEL") or default_model
+        self.web_search_requests_total = 0
+        self.web_search_usage_reported = False
+
+    def _meta_chat(self, system: str, user: str, enable_web_search: bool = False) -> str:
+        payload = {"model": self.model, "instructions": system, "input": user}
+        if enable_web_search:
+            payload["tools"] = [{"type": "web_search", "search_context_size": "medium"}]
+        try:
+            response = requests.post(
+                self.base_url + "/responses",
+                headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=180,
+            )
+            response.raise_for_status()
+            data = response.json()
+            content = str(data.get("output_text") or "").strip()
+            citations = []
+            searched = False
+            for item in data.get("output") or []:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("type") == "web_search_call":
+                    searched = True
+                for block in item.get("content") or []:
+                    if not isinstance(block, dict):
+                        continue
+                    for ann in block.get("annotations") or []:
+                        citation = ann.get("url_citation") if isinstance(ann, dict) else None
+                        if not isinstance(citation, dict):
+                            citation = ann if isinstance(ann, dict) else {}
+                        url = citation.get("url")
+                        if not isinstance(url, str):
+                            continue
+                        try:
+                            parsed = urlsplit(url.strip())
+                            if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+                                continue
+                        except ValueError:
+                            continue
+                        title = html.escape(str(citation.get("title") or url), quote=False)
+                        title = title.replace("[", r"\[").replace("]", r"\]").replace("\n", " ")
+                        safe_url = quote(url.strip(), safe=":/?#[]@!    def __init__(self, api_key=None, base_url=None, model=None):
         self.api_key = api_key or os.getenv("AI_API_KEY", "")
         self.base_url = (base_url or os.getenv("AI_BASE_URL") or DEFAULT_BASE_URL).rstrip("/")
         self.model = model or os.getenv("AI_MODEL", DEFAULT_MODEL)
         self.web_search_requests_total = 0
         self.web_search_usage_reported = False
+'()*+,;=%-._~")
+                        if safe_url not in [entry[1] for entry in citations]:
+                            citations.append((title, safe_url))
+            if searched:
+                self.web_search_usage_reported = True
+                self.web_search_requests_total += 1
+            if citations:
+                content += "\n\n**Web sources**\n" + "\n".join(f"- [{title}](<{url}>)" for title, url in citations)
+            if not content:
+                raise AIProviderError("Meta Model API returned an empty response.")
+            return content
+        except requests.RequestException as exc:
+            detail = getattr(getattr(exc, "response", None), "text", "")
+            raise AIProviderError(f"Meta Model API request failed: {detail or exc}") from exc
+        except (TypeError, ValueError) as exc:
+            raise AIProviderError("Unexpected response from Meta Model API.") from exc
 
     def chat(self, system: str, user: str, temperature: float = 0.4,
              enable_web_search: bool = False) -> str:
         if not self.api_key:
-            raise AIProviderError("Add OPENROUTER_API_KEY in Streamlit app Secrets.")
+            key_name = "MODEL_API_KEY" if self.provider == "meta" else "OPENROUTER_API_KEY"
+            raise AIProviderError(f"Add {key_name} in Streamlit app Secrets.")
+        if self.provider == "meta":
+            return self._meta_chat(system, user, enable_web_search)
         payload = {
             "model": self.model,
             "temperature": temperature,
@@ -138,7 +208,7 @@ class Agent:
 
     def run(self, task, context="", enable_web_search=False):
         return self.client.chat(
-            LANGUAGE_GUIDANCE + "\n\n" + self.instructions,
+            LANGUAGE_GUIDANCE + "\n\n" + ELECTRICAL_ENGINEERING_GUIDANCE + "\n\n" + self.instructions,
             f"Task:\n{task}\n\nContext:\n{context or 'None'}",
             enable_web_search=enable_web_search,
         )
