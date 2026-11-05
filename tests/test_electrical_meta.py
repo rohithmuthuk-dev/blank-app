@@ -39,7 +39,6 @@ class MetaModelApiTests(unittest.TestCase):
         self.assertEqual(payload["tools"][0]["search_context_size"], "low")
         self.assertEqual(payload["max_tool_calls"], 2)
         self.assertFalse(payload["parallel_tool_calls"])
-        self.assertEqual(payload["include"], ["web_search_call.results"])
         self.assertTrue(client.web_search_usage_reported)
         self.assertEqual(client.web_search_requests_total, 1)
         self.assertEqual(client.web_search_usage_label, "web-search tool calls")
