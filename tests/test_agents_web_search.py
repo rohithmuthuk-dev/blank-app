@@ -162,6 +162,8 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
             [False, True, False, False],
         )
         self.assertIn("You are NOVA Researcher", client.calls[1]["system"])
+        self.assertIn("selected provider", client.calls[1]["system"])
+        self.assertNotIn("OpenRouter web-search tool", client.calls[1]["system"])
 
     def test_researcher_has_no_web_search_when_toggle_is_off(self):
         client = self.FakeClient()
