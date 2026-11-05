@@ -137,8 +137,9 @@ class AIClient:
                     "max_content_tokens": 6000,
                 },
             }]
-            # Two searches plus one source-page fetch at most per task.
-            payload["max_tool_calls"] = 3
+            # Two total server-tool steps: search and fetch share this hard cap.
+            # This also bounds native-search providers that may ignore max_uses.
+            payload["max_tool_calls"] = 2
         try:
             response = requests.post(
                 self.base_url + "/chat/completions",
