@@ -36,8 +36,41 @@ class MetaModelApiTests(unittest.TestCase):
         client.chat("system", "Find current official IEC information", enable_web_search=True)
         payload = post.call_args.kwargs["json"]
         self.assertEqual(payload["tools"][0]["type"], "web_search")
+        self.assertEqual(payload["tools"][0]["search_context_size"], "low")
+        self.assertEqual(payload["max_tool_calls"], 2)
+        self.assertFalse(payload["parallel_tool_calls"])
+        self.assertEqual(payload["include"], ["web_search_call.results"])
         self.assertTrue(client.web_search_usage_reported)
         self.assertEqual(client.web_search_requests_total, 1)
+        self.assertEqual(client.web_search_usage_label, "web-search tool calls")
+
+    @patch("agents.requests.post")
+    def test_meta_search_usage_counts_each_reported_tool_call(self, post):
+        post.return_value = FakeMetaResponse({
+            "output_text": "Two research steps.",
+            "output": [
+                {"type": "web_search_call", "status": "completed"},
+                {"type": "web_search_call", "status": "completed"},
+                {"type": "message", "content": [{"type": "output_text", "text": "Two research steps."}]},
+            ],
+        })
+        client = AIClient(api_key="meta-test", provider="meta")
+        client.chat("system", "Research current standards", enable_web_search=True)
+        self.assertTrue(client.web_search_usage_reported)
+        self.assertEqual(client.web_search_requests_total, 2)
+
+    @patch("agents.requests.post")
+    def test_meta_reports_zero_when_model_does_not_invoke_search(self, post):
+        post.return_value = FakeMetaResponse({
+            "output_text": "A general answer.",
+            "output": [
+                {"type": "message", "content": [{"type": "output_text", "text": "A general answer."}]}
+            ],
+        })
+        client = AIClient(api_key="meta-test", provider="meta")
+        client.chat("system", "Explain a basic concept", enable_web_search=True)
+        self.assertTrue(client.web_search_usage_reported)
+        self.assertEqual(client.web_search_requests_total, 0)
 
     @patch("agents.requests.post")
     def test_meta_citations_are_rendered(self, post):
