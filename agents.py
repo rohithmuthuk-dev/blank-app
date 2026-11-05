@@ -41,7 +41,6 @@ class AIClient:
             # Keep search sequential and cap the whole research request at two calls.
             payload["max_tool_calls"] = 2
             payload["parallel_tool_calls"] = False
-            payload["include"] = ["web_search_call.results"]
         try:
             response = requests.post(
                 self.base_url + "/responses",
