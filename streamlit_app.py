@@ -185,7 +185,7 @@ selected_agent_names = st.multiselect(
 enable_web_search = st.checkbox(
     "🌐 Enable live web research (provider-limited)",
     value=False,
-    help="Meta: at most 2 built-in web-search tool calls. OpenRouter: at most 2 searches plus 1 source-page fetch. Search may incur provider charges and fetched content uses model tokens. Leave off for ordinary tasks.",
+    help="Meta: at most 2 built-in web-search tool calls. OpenRouter: at most 2 server-tool calls total, shared by search and source-page fetch. Search may incur provider charges and fetched content uses model tokens. Leave off for ordinary tasks.",
 )
 if st.button("🚀 Run agent team", type="primary", disabled=not task.strip()):
     meta_key = secret("MODEL_API_KEY")
