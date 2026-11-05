@@ -36,7 +36,7 @@ class AIClientWebSearchTests(unittest.TestCase):
         post.return_value = FakeResponse({"content": "Research result"})
         self.client.chat("system", "research this", enable_web_search=True)
         payload = post.call_args.kwargs["json"]
-        self.assertEqual(payload["max_tool_calls"], 3)
+        self.assertEqual(payload["max_tool_calls"], 2)
         self.assertNotIn("stop_server_tools_when", payload)
         self.assertEqual(payload["tools"][0]["parameters"]["max_uses"], 2)
         self.assertEqual(payload["tools"][0]["parameters"]["max_total_results"], 10)
