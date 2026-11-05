@@ -183,9 +183,9 @@ selected_agent_names = st.multiselect(
     help="Your selected agents work alongside Planner, Researcher, Coder, Analyst and Reviewer.",
 )
 enable_web_search = st.checkbox(
-    "🌐 Enable live web research (2 searches + 1 source fetch max)",
+    "🌐 Enable live web research (provider-limited)",
     value=False,
-    help="When selected, the Researcher can make at most 2 web searches and fetch 1 source page. Search may incur OpenRouter charges; fetched content adds model-token usage. Leave off for ordinary tasks.",
+    help="Meta: at most 2 built-in web-search tool calls. OpenRouter: at most 2 searches plus 1 source-page fetch. Search may incur provider charges and fetched content uses model tokens. Leave off for ordinary tasks.",
 )
 if st.button("🚀 Run agent team", type="primary", disabled=not task.strip()):
     meta_key = secret("MODEL_API_KEY")
@@ -217,6 +217,7 @@ if st.button("🚀 Run agent team", type="primary", disabled=not task.strip()):
             result["web_search_usage"] = {
                 "reported": client.web_search_usage_reported,
                 "requests": client.web_search_requests_total,
+                "label": client.web_search_usage_label,
             }
         status.update(label="NOVA finished its review", state="complete", expanded=False)
         st.session_state["nova_results"] = result
@@ -241,13 +242,20 @@ if st.session_state.get("nova_results"):
     )
     search_usage = result.get("web_search_usage")
     if search_usage:
-        if search_usage["reported"]:
+        if search_usage["reported"] and search_usage["requests"] > 0:
             st.caption(
-                f"Live web-search requests used: {search_usage['requests']} (maximum 2 for this task)."
+                f"Live web research activity reported: {search_usage['requests']} "
+                f"{search_usage['label']}. Check the selected provider’s billing page for final charges."
+            )
+        elif search_usage["reported"]:
+            st.caption(
+                "The selected provider reports that the model did not invoke live web search for this task. "
+                "It may have answered without searching."
             )
         else:
             st.caption(
-                "OpenRouter did not return a web-search usage count. Check your OpenRouter activity for billing details."
+                "The selected provider did not return a verifiable web-search usage count. "
+                "Check its activity or billing page for exact charges."
             )
     with st.expander("See agent activity"):
         for key, value in result.items():
