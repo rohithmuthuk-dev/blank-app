@@ -159,7 +159,7 @@ class AIClientWebSearchTests(unittest.TestCase):
 class ResearchDomainValidationTests(unittest.TestCase):
     def test_normalizes_and_deduplicates_public_domains(self):
         self.assertEqual(
-            normalize_allowed_domains("IEC.CH; dewa.gov.ae\\niec.ch"),
+            normalize_allowed_domains("IEC.CH; dewa.gov.ae\niec.ch"),
             ["iec.ch", "dewa.gov.ae"],
         )
 
