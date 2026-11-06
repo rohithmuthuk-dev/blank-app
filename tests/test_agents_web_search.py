@@ -61,7 +61,7 @@ class AIClientWebSearchTests(unittest.TestCase):
     @patch("agents.requests.post")
     def test_meta_rejects_unsupported_domain_filter_before_network(self, post):
         client = AIClient(api_key="meta-test", provider="meta")
-        with self.assertRaisesRegex(AIProviderError, "does not support enforced domain filtering"):
+        with self.assertRaisesRegex(AIProviderError, "not supported by the Meta web-search API"):
             client.chat(
                 "system", "research",
                 enable_web_search=True,
