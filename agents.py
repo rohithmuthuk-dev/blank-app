@@ -23,7 +23,7 @@ def normalize_allowed_domains(domains):
     if domains is None:
         return []
     if isinstance(domains, str):
-        parts = re.split(r"[,;\\n]+", domains)
+        parts = re.split(r"[,;\n]+", domains)
     elif isinstance(domains, (list, tuple, set)):
         parts = list(domains)
     else:
@@ -285,8 +285,8 @@ class Agent:
         if allowed_domains:
             chat_options["allowed_domains"] = allowed_domains
         return self.client.chat(
-            LANGUAGE_GUIDANCE + "\\n\\n" + ELECTRICAL_ENGINEERING_GUIDANCE + "\\n\\n" + self.instructions,
-            f"Task:\\n{task}\\n\\nContext:\\n{context or 'None'}",
+            LANGUAGE_GUIDANCE + "\n\n" + ELECTRICAL_ENGINEERING_GUIDANCE + "\n\n" + self.instructions,
+            f"Task:\n{task}\n\nContext:\n{context or 'None'}",
             **chat_options,
         )
 
@@ -335,7 +335,7 @@ class NovaOrchestrator:
             if allowed_domains:
                 research_options["allowed_domains"] = allowed_domains
             out["research"] = self.researcher.run(
-                task, out["plan"] + "\\n" + memory,
+                task, out["plan"] + "\n" + memory,
                 **research_options,
             )
         if any(word in lower for word in ("code", "software", "program", "develop", "build")):
