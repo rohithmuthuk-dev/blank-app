@@ -6,7 +6,7 @@ from pathlib import Path
 import speech_recognition as sr
 from pypdf import PdfReader
 import streamlit as st
-from agents import AIClient, AIProviderError, NovaOrchestrator
+from agents import AIClient, AIProviderError, NovaOrchestrator, normalize_allowed_domains
 from electrical_domain import EQUIPMENT, DELIVERABLES, build_workbench_prompt
 
 DB_PATH = Path("nova_memory.db")
@@ -47,6 +47,9 @@ def secret(key, default=""):
         return str(st.secrets.get(key, default))
     except Exception:
         return default
+
+
+selected_provider = "meta" if secret("MODEL_API_KEY") else "openrouter"
 
 st.markdown(
     '<div class="nova-hero"><h1>⚡ NOVA Electrical AI</h1><b>AI-Powered Testing & Commissioning Assistant</b><p>Substations · Protection systems · IEC-aware guidance · Tamil + English</p></div>',
@@ -187,10 +190,33 @@ enable_web_search = st.checkbox(
     value=False,
     help="Meta: at most 2 built-in web-search tool calls. OpenRouter: at most 2 server-tool calls total, shared by search and source-page fetch. Search may incur provider charges and fetched content uses model tokens. Leave off for ordinary tasks.",
 )
-if st.button("🚀 Run agent team", type="primary", disabled=not task.strip()):
+allowed_domains = []
+domain_filter_error = None
+if enable_web_search and selected_provider == "openrouter":
+    domain_filter_text = st.text_input(
+        "Restrict research to these domains (optional)",
+        placeholder="iec.ch, ieee.org, dewa.gov.ae",
+        help="Enter up to 10 public hostnames separated by commas. The same allowlist applies to search results and fetched pages. Subdomains are included.",
+    )
+    try:
+        allowed_domains = normalize_allowed_domains(domain_filter_text)
+    except ValueError as exc:
+        domain_filter_error = str(exc)
+        st.error(domain_filter_error)
+elif enable_web_search and selected_provider == "meta":
+    st.info(
+        "Meta's current web-search API does not support enforced domain filters. "
+        "For Meta research, ask NOVA to prefer official standards bodies, regulators, utilities or manufacturers."
+    )
+
+if st.button(
+    "🚀 Run agent team",
+    type="primary",
+    disabled=not task.strip() or bool(domain_filter_error),
+):
     meta_key = secret("MODEL_API_KEY")
     openrouter_key = secret("OPENROUTER_API_KEY") or secret("AI_API_KEY")
-    provider = "meta" if meta_key else "openrouter"
+    provider = selected_provider
     client = AIClient(
         api_key=meta_key if provider == "meta" else openrouter_key,
         base_url=(secret("META_BASE_URL") or "https://api.meta.ai/v1") if provider == "meta" else (secret("AI_BASE_URL") or None),
@@ -212,8 +238,10 @@ if st.button("🚀 Run agent team", type="primary", disabled=not task.strip()):
         result = NovaOrchestrator(client, progress).run(
             task_with_documents, memory(), enable_web_search=enable_web_search,
             custom_agents=chosen_agents,
+            allowed_domains=allowed_domains or None,
         )
         if enable_web_search:
+            result["web_search_domain_filter"] = allowed_domains
             result["web_search_usage"] = {
                 "reported": client.web_search_usage_reported,
                 "requests": client.web_search_requests_total,
@@ -240,6 +268,9 @@ if st.session_state.get("nova_results"):
         file_name="nova_electrical_ai_draft.md",
         mime="text/markdown",
     )
+    applied_domains = result.get("web_search_domain_filter") or []
+    if applied_domains:
+        st.caption("Research restricted to: " + ", ".join(applied_domains))
     search_usage = result.get("web_search_usage")
     if search_usage:
         if search_usage["reported"] and search_usage["requests"] > 0:
