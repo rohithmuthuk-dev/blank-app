@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from agents import AIClient, AIProviderError, NovaOrchestrator
+from agents import AIClient, AIProviderError, NovaOrchestrator, normalize_allowed_domains
 
 
 class FakeResponse:
@@ -44,6 +44,30 @@ class AIClientWebSearchTests(unittest.TestCase):
         self.assertEqual(payload["tools"][1]["parameters"]["engine"], "openrouter")
         self.assertEqual(payload["tools"][1]["parameters"]["max_uses"], 1)
         self.assertEqual(payload["tools"][1]["parameters"]["max_content_tokens"], 6000)
+
+    @patch("agents.requests.post")
+    def test_domain_allowlist_reaches_both_openrouter_tools(self, post):
+        post.return_value = FakeResponse({"content": "Filtered research."})
+        self.client.chat(
+            "system", "research official sources",
+            enable_web_search=True,
+            allowed_domains=["IEC.CH", "dewa.gov.ae"],
+        )
+        payload = post.call_args.kwargs["json"]
+        expected = ["iec.ch", "dewa.gov.ae"]
+        self.assertEqual(payload["tools"][0]["parameters"]["allowed_domains"], expected)
+        self.assertEqual(payload["tools"][1]["parameters"]["allowed_domains"], expected)
+
+    @patch("agents.requests.post")
+    def test_meta_rejects_unsupported_domain_filter_before_network(self, post):
+        client = AIClient(api_key="meta-test", provider="meta")
+        with self.assertRaisesRegex(AIProviderError, "does not support enforced domain filtering"):
+            client.chat(
+                "system", "research",
+                enable_web_search=True,
+                allowed_domains=["iec.ch"],
+            )
+        post.assert_not_called()
 
     @patch("agents.requests.post")
     def test_url_citations_are_added_to_the_answer(self, post):
@@ -132,6 +156,36 @@ class AIClientWebSearchTests(unittest.TestCase):
             client.chat("system", "hello")
 
 
+class ResearchDomainValidationTests(unittest.TestCase):
+    def test_normalizes_and_deduplicates_public_domains(self):
+        self.assertEqual(
+            normalize_allowed_domains("IEC.CH; dewa.gov.ae\\niec.ch"),
+            ["iec.ch", "dewa.gov.ae"],
+        )
+
+    def test_empty_domain_filter_is_allowed(self):
+        self.assertEqual(normalize_allowed_domains("  , ;  "), [])
+
+    def test_rejects_urls_paths_ip_and_private_hostnames(self):
+        invalid = [
+            "https://iec.ch",
+            "example.com/private/path",
+            "127.0.0.1",
+            "localhost",
+            "intranet.local",
+            "*.example.com",
+        ]
+        for domain in invalid:
+            with self.subTest(domain=domain):
+                with self.assertRaises(ValueError):
+                    normalize_allowed_domains(domain)
+
+    def test_rejects_more_than_ten_domains(self):
+        domains = [f"source{i}.example" for i in range(11)]
+        with self.assertRaisesRegex(ValueError, "no more than 10"):
+            normalize_allowed_domains(domains)
+
+
 
 class NovaOrchestratorWebSearchTests(unittest.TestCase):
     class FakeClient:
@@ -144,10 +198,11 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
                 "Reviewed final answer.",
             ]
 
-        def chat(self, system, user, temperature=0.4, enable_web_search=False):
+        def chat(self, system, user, temperature=0.4, enable_web_search=False, allowed_domains=None):
             self.calls.append({
                 "system": system,
                 "enable_web_search": enable_web_search,
+                "allowed_domains": allowed_domains,
             })
             return self.responses[len(self.calls) - 1]
 
@@ -170,6 +225,18 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
         NovaOrchestrator(client).run("Research this topic", enable_web_search=False)
         self.assertTrue(client.calls)
         self.assertTrue(all(not call["enable_web_search"] for call in client.calls))
+
+    def test_domain_allowlist_is_sent_only_to_researcher(self):
+        client = self.FakeClient()
+        NovaOrchestrator(client).run(
+            "Research official sources",
+            enable_web_search=True,
+            allowed_domains=["iec.ch"],
+        )
+        self.assertEqual(
+            [call["allowed_domains"] for call in client.calls],
+            [None, ["iec.ch"], None, None],
+        )
 
 
 if __name__ == "__main__":
