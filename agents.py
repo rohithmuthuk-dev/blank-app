@@ -1,6 +1,7 @@
 """NOVA specialist-agent orchestration using Meta Model API or OpenRouter."""
 from __future__ import annotations
 import html
+import ipaddress
 import os
 import re
 import requests
@@ -15,6 +16,51 @@ LANGUAGE_GUIDANCE = """The user may write or speak in Tamil (தமிழ்), c
 
 class AIProviderError(RuntimeError):
     pass
+
+
+def normalize_allowed_domains(domains):
+    """Validate an optional public-domain allowlist for OpenRouter web tools."""
+    if domains is None:
+        return []
+    if isinstance(domains, str):
+        parts = re.split(r"[,;\\n]+", domains)
+    elif isinstance(domains, (list, tuple, set)):
+        parts = list(domains)
+    else:
+        raise ValueError("Enter domains as comma-separated hostnames.")
+
+    normalized = []
+    for part in parts:
+        domain = str(part).strip().lower().rstrip(".")
+        if not domain:
+            continue
+        try:
+            ascii_domain = domain.encode("idna").decode("ascii")
+        except UnicodeError as exc:
+            raise ValueError(f"Invalid domain: {domain}") from exc
+        if len(ascii_domain) > 253 or "." not in ascii_domain:
+            raise ValueError(f"Enter a public hostname such as iec.ch, not: {domain}")
+        labels = ascii_domain.split(".")
+        if any(
+            not label or len(label) > 63
+            or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", label)
+            for label in labels
+        ):
+            raise ValueError(f"Invalid domain hostname: {domain}")
+        if labels[-1] in {"local", "localhost", "internal", "test", "invalid"}:
+            raise ValueError(f"Private or reserved domains are not allowed: {domain}")
+        try:
+            ipaddress.ip_address(ascii_domain)
+        except ValueError:
+            pass
+        else:
+            raise ValueError("Use public domain names, not IP addresses.")
+        if ascii_domain not in normalized:
+            normalized.append(ascii_domain)
+        if len(normalized) > 10:
+            raise ValueError("Use no more than 10 allowed domains.")
+    return normalized
+
 
 class AIClient:
     def __init__(self, api_key=None, base_url=None, model=None, provider=None):
@@ -106,10 +152,16 @@ class AIClient:
             raise AIProviderError("Unexpected response from Meta Model API.") from exc
 
     def chat(self, system: str, user: str, temperature: float = 0.4,
-             enable_web_search: bool = False) -> str:
+             enable_web_search: bool = False, allowed_domains=None) -> str:
         if not self.api_key:
             key_name = "MODEL_API_KEY" if self.provider == "meta" else "OPENROUTER_API_KEY"
             raise AIProviderError(f"Add {key_name} in Streamlit app Secrets.")
+        normalized_domains = normalize_allowed_domains(allowed_domains) if enable_web_search else []
+        if self.provider == "meta" and normalized_domains:
+            raise AIProviderError(
+                "Strict domain filtering is not supported by the Meta web-search API. "
+                "Remove the domain restriction or use OpenRouter."
+            )
         if self.provider == "meta":
             return self._meta_chat(system, user, enable_web_search)
         payload = {
@@ -121,20 +173,26 @@ class AIClient:
             ],
         }
         if enable_web_search:
+            search_parameters = {
+                "max_results": 5,
+                "max_total_results": 10,
+                "max_uses": 2,
+            }
+            fetch_parameters = {
+                "engine": "openrouter",
+                "max_uses": 1,
+                "max_content_tokens": 6000,
+            }
+            if normalized_domains:
+                # The same allowlist constrains both discovery and page retrieval.
+                search_parameters["allowed_domains"] = normalized_domains
+                fetch_parameters["allowed_domains"] = normalized_domains
             payload["tools"] = [{
                 "type": "openrouter:web_search",
-                "parameters": {
-                    "max_results": 5,
-                    "max_total_results": 10,
-                    "max_uses": 2,
-                },
+                "parameters": search_parameters,
             }, {
                 "type": "openrouter:web_fetch",
-                "parameters": {
-                    "engine": "openrouter",
-                    "max_uses": 1,
-                    "max_content_tokens": 6000,
-                },
+                "parameters": fetch_parameters,
             }]
             # Two total server-tool steps: search and fetch share this hard cap.
             # This also bounds native-search providers that may ignore max_uses.
@@ -222,11 +280,14 @@ class Agent:
     def __init__(self, name, instructions, client):
         self.name, self.instructions, self.client = name, instructions, client
 
-    def run(self, task, context="", enable_web_search=False):
+    def run(self, task, context="", enable_web_search=False, allowed_domains=None):
+        chat_options = {"enable_web_search": enable_web_search}
+        if allowed_domains:
+            chat_options["allowed_domains"] = allowed_domains
         return self.client.chat(
-            LANGUAGE_GUIDANCE + "\n\n" + ELECTRICAL_ENGINEERING_GUIDANCE + "\n\n" + self.instructions,
-            f"Task:\n{task}\n\nContext:\n{context or 'None'}",
-            enable_web_search=enable_web_search,
+            LANGUAGE_GUIDANCE + "\\n\\n" + ELECTRICAL_ENGINEERING_GUIDANCE + "\\n\\n" + self.instructions,
+            f"Task:\\n{task}\\n\\nContext:\\n{context or 'None'}",
+            **chat_options,
         )
 
 class NovaOrchestrator:
@@ -259,7 +320,7 @@ class NovaOrchestrator:
             client,
         )
 
-    def run(self, task, memory="", enable_web_search=False, custom_agents=None):
+    def run(self, task, memory="", enable_web_search=False, custom_agents=None, allowed_domains=None):
         out = {}
         self.progress("Planner is preparing the task plan…")
         out["plan"] = self.planner.run(task, memory)
@@ -270,9 +331,12 @@ class NovaOrchestrator:
         if needs_research:
             self.progress("Research Agent is using the selected provider’s live web-search tool…" if enable_web_search
                           else "Research Agent is preparing a research brief…")
+            research_options = {"enable_web_search": enable_web_search}
+            if allowed_domains:
+                research_options["allowed_domains"] = allowed_domains
             out["research"] = self.researcher.run(
-                task, out["plan"] + "\n" + memory,
-                enable_web_search=enable_web_search,
+                task, out["plan"] + "\\n" + memory,
+                **research_options,
             )
         if any(word in lower for word in ("code", "software", "program", "develop", "build")):
             self.progress("Coding Agent is working…")
