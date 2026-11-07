@@ -30,14 +30,22 @@ class AIClientWebSearchTests(unittest.TestCase):
         payload = post.call_args.kwargs["json"]
         self.assertNotIn("tools", payload)
         self.assertNotIn("max_tool_calls", payload)
+        self.assertNotIn("stop_server_tools_when", payload)
+        self.assertNotIn("parallel_tool_calls", payload)
 
     @patch("agents.requests.post")
     def test_web_search_has_a_two_call_limit(self, post):
         post.return_value = FakeResponse({"content": "Research result"})
         self.client.chat("system", "research this", enable_web_search=True)
         payload = post.call_args.kwargs["json"]
-        self.assertEqual(payload["max_tool_calls"], 2)
-        self.assertNotIn("stop_server_tools_when", payload)
+        self.assertNotIn("max_tool_calls", payload)
+        self.assertFalse(payload["parallel_tool_calls"])
+        self.assertEqual(payload["stop_server_tools_when"], [
+            {"type": "step_count_is", "step_count": 2},
+            {"type": "max_cost", "max_cost_in_dollars": 0.014},
+        ])
+        self.assertEqual(payload["tools"][0]["parameters"]["engine"], "exa")
+        self.assertEqual(payload["tools"][0]["parameters"]["search_context_size"], "low")
         self.assertEqual(payload["tools"][0]["parameters"]["max_uses"], 2)
         self.assertEqual(payload["tools"][0]["parameters"]["max_total_results"], 10)
         self.assertEqual(payload["tools"][1]["type"], "openrouter:web_fetch")
