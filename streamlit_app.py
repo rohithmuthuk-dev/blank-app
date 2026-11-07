@@ -188,7 +188,7 @@ selected_agent_names = st.multiselect(
 enable_web_search = st.checkbox(
     "🌐 Enable live web research (provider-limited)",
     value=False,
-    help="Meta: at most 2 built-in web-search tool calls. OpenRouter: at most 2 server-tool calls total, shared by search and source-page fetch. Search may incur provider charges and fetched content uses model tokens. Leave off for ordinary tasks.",
+    help="Meta: at most 2 built-in web-search calls. OpenRouter: Exa search is limited to 2 requests, 10 total results, and a $0.014 server-tool spend stop; search and fetch share a 2-step cap. Model-token costs are separate. Leave off for ordinary tasks.",
 )
 allowed_domains = []
 domain_filter_error = None
