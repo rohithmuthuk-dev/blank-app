@@ -174,9 +174,12 @@ class AIClient:
         }
         if enable_web_search:
             search_parameters = {
+                # Pin Exa so the published per-search pricing is predictable.
+                "engine": "exa",
                 "max_results": 5,
                 "max_total_results": 10,
                 "max_uses": 2,
+                "search_context_size": "low",
             }
             fetch_parameters = {
                 "engine": "openrouter",
@@ -194,9 +197,15 @@ class AIClient:
                 "type": "openrouter:web_fetch",
                 "parameters": fetch_parameters,
             }]
-            # Two total server-tool steps: search and fetch share this hard cap.
-            # This also bounds native-search providers that may ignore max_uses.
-            payload["max_tool_calls"] = 2
+            # Search and fetch share a two-step budget. The stop conditions use OR:
+            # stop after two server-tool steps or when server-tool spend exceeds $0.014.
+            # Current Exa pricing is $0.007 per search; model-token costs are separate.
+            # stop_server_tools_when overrides max_tool_calls, so do not send both.
+            payload["parallel_tool_calls"] = False
+            payload["stop_server_tools_when"] = [
+                {"type": "step_count_is", "step_count": 2},
+                {"type": "max_cost", "max_cost_in_dollars": 0.014},
+            ]
         try:
             response = requests.post(
                 self.base_url + "/chat/completions",
