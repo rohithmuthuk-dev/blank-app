@@ -306,7 +306,7 @@ if st.session_state.get("nova_results"):
                 title = str(source.get("title") or source.get("url") or "Source")
                 url = str(source.get("url") or "")
                 if url.startswith(("https://", "http://")):
-                    st.markdown(f"- [{title}]({url})")
+                    st.markdown(f"- [{title}](<{url}>)")
     with st.expander("See agent activity"):
         for key, value in result.items():
             if key not in ("final", "web_search_usage", "research_sources"):
