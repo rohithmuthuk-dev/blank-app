@@ -87,9 +87,14 @@ class MetaModelApiTests(unittest.TestCase):
                 }],
             }],
         })
-        answer = AIClient(api_key="meta-test", provider="meta").chat("system", "question")
+        client = AIClient(api_key="meta-test", provider="meta")
+        answer = client.chat("system", "question")
         self.assertIn("[Official source](<https://example.com/standard>)", answer)
         self.assertIn("Sourced answer", answer)
+        self.assertEqual(client.last_citations, [{
+            "title": "Official source",
+            "url": "https://example.com/standard",
+        }])
 
     def test_meta_missing_key_has_actionable_error(self):
         client = AIClient(api_key="", provider="meta")
