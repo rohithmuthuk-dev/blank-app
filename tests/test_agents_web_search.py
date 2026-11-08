@@ -91,6 +91,10 @@ class AIClientWebSearchTests(unittest.TestCase):
         })
         answer = self.client.chat("system", "research")
         self.assertIn("[Example article](<https://example.com/article>)", answer)
+        self.assertEqual(self.client.last_citations, [{
+            "title": "Example article",
+            "url": "https://example.com/article",
+        }])
 
 
     @patch("agents.requests.post")
@@ -107,6 +111,10 @@ class AIClientWebSearchTests(unittest.TestCase):
         self.assertIn("https://safe.example/article", answer)
         self.assertNotIn("javascript:", answer)
         self.assertNotIn("data:text/html", answer)
+        self.assertEqual(
+            [source["url"] for source in self.client.last_citations],
+            ["https://safe.example/article"],
+        )
 
     @patch("agents.requests.post")
     def test_citation_title_cannot_break_markdown_link(self, post):
@@ -199,6 +207,7 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
     class FakeClient:
         def __init__(self):
             self.calls = []
+            self.last_citations = []
             self.responses = [
                 "Plan: research this topic and cite sources.",
                 "Research findings.",
@@ -212,6 +221,10 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
                 "enable_web_search": enable_web_search,
                 "allowed_domains": allowed_domains,
             })
+            self.last_citations = (
+                [{"title": "Official source", "url": "https://iec.ch"}]
+                if enable_web_search else []
+            )
             return self.responses[len(self.calls) - 1]
 
     def test_only_researcher_receives_web_search_tool(self):
@@ -227,6 +240,10 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
         self.assertIn("You are NOVA Researcher", client.calls[1]["system"])
         self.assertIn("selected provider", client.calls[1]["system"])
         self.assertNotIn("OpenRouter web-search tool", client.calls[1]["system"])
+        self.assertEqual(result["research_sources"], [{
+            "title": "Official source",
+            "url": "https://iec.ch",
+        }])
 
     def test_researcher_has_no_web_search_when_toggle_is_off(self):
         client = self.FakeClient()
