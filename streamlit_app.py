@@ -241,6 +241,7 @@ if st.button(
             allowed_domains=allowed_domains or None,
         )
         if enable_web_search:
+            result["research_provider"] = provider
             result["web_search_domain_filter"] = allowed_domains
             result["web_search_usage"] = {
                 "reported": client.web_search_usage_reported,
@@ -272,25 +273,43 @@ if st.session_state.get("nova_results"):
     if applied_domains:
         st.caption("Research restricted to: " + ", ".join(applied_domains))
     search_usage = result.get("web_search_usage")
+    research_sources = result.get("research_sources") or []
     if search_usage:
         if search_usage["reported"] and search_usage["requests"] > 0:
             st.caption(
                 f"Live web research activity reported: {search_usage['requests']} "
                 f"{search_usage['label']}. Check the selected provider’s billing page for final charges."
             )
+            if research_sources:
+                st.success(
+                    f"Researcher received {len(research_sources)} source citation(s) from "
+                    f"{result.get('research_provider', 'the selected provider')}."
+                )
+            else:
+                st.warning(
+                    "The provider reports that search was used, but returned no usable source citations. "
+                    "Treat this answer as not independently source-verified."
+                )
         elif search_usage["reported"]:
-            st.caption(
-                "The selected provider reports that the model did not invoke live web search for this task. "
-                "It may have answered without searching."
+            st.info(
+                "The selected provider confirms that the model did not invoke live web search. "
+                "This answer is not web-verified."
             )
         else:
-            st.caption(
-                "The selected provider did not return a verifiable web-search usage count. "
-                "Check its activity or billing page for exact charges."
+            st.warning(
+                "The provider did not return a verifiable search-usage count. "
+                "Do not assume live search occurred; check its activity or billing page."
             )
+    if research_sources:
+        with st.expander(f"Open research sources ({len(research_sources)})"):
+            for source in research_sources:
+                title = str(source.get("title") or source.get("url") or "Source")
+                url = str(source.get("url") or "")
+                if url.startswith(("https://", "http://")):
+                    st.markdown(f"- [{title}]({url})")
     with st.expander("See agent activity"):
         for key, value in result.items():
-            if key not in ("final", "web_search_usage"):
+            if key not in ("final", "web_search_usage", "research_sources"):
                 label = key.replace("custom_", "").replace("_", " ").title()
                 st.markdown(f"**{label} Agent**")
                 st.markdown(value)
