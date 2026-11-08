@@ -78,6 +78,8 @@ class AIClient:
         self.web_search_usage_label = (
             "web-search tool calls" if self.provider == "meta" else "search requests"
         )
+        # Structured, validated citations from the most recent model request.
+        self.last_citations = []
 
     def _meta_chat(self, system: str, user: str, enable_web_search: bool = False) -> str:
         payload = {"model": self.model, "instructions": system, "input": user}
@@ -140,6 +142,9 @@ class AIClient:
                 content = "\n".join(text_blocks).strip()
             if enable_web_search and isinstance(output_items, list):
                 self.web_search_requests_total += search_tool_calls
+            self.last_citations = [
+                {"title": title, "url": url} for title, url in citations
+            ]
             if citations:
                 content += "\n\n**Web sources**\n" + "\n".join(f"- [{title}](<{url}>)" for title, url in citations)
             if not content:
@@ -153,6 +158,7 @@ class AIClient:
 
     def chat(self, system: str, user: str, temperature: float = 0.4,
              enable_web_search: bool = False, allowed_domains=None) -> str:
+        self.last_citations = []
         if not self.api_key:
             key_name = "MODEL_API_KEY" if self.provider == "meta" else "OPENROUTER_API_KEY"
             raise AIProviderError(f"Add {key_name} in Streamlit app Secrets.")
@@ -272,6 +278,9 @@ class AIClient:
                 safe_url = quote(url, safe=":/?#[]@!$&'()*+,;=%-._~")
                 if safe_url not in [entry[1] for entry in citations]:
                     citations.append((title, safe_url))
+            self.last_citations = [
+                {"title": title, "url": url} for title, url in citations
+            ]
             if citations:
                 content += "\n\n**Web sources**\n" + "\n".join(
                     f"- [{title}](<{url}>)" for title, url in citations
@@ -347,6 +356,12 @@ class NovaOrchestrator:
                 task, out["plan"] + "\n" + memory,
                 **research_options,
             )
+            if enable_web_search:
+                # Capture citations immediately; later agent calls overwrite the
+                # client's per-request citation list.
+                out["research_sources"] = list(
+                    getattr(self.client, "last_citations", []) or []
+                )
         if any(word in lower for word in ("code", "software", "program", "develop", "build")):
             self.progress("Coding Agent is working…")
             out["coding"] = self.coder.run(task, out["plan"] + "\n" + memory)
