@@ -62,6 +62,79 @@ def normalize_allowed_domains(domains):
     return normalized
 
 
+def normalize_public_http_url(url):
+    """Return a safe public HTTP(S) URL for a source link, or None.
+
+    This is a display-safety check, not a replacement for provider-side SSRF
+    protections. It rejects local/private destinations and ambiguous numeric
+    host forms so citations cannot direct users to local network services.
+    """
+    if not isinstance(url, str):
+        return None
+    candidate = url.strip()
+    if (
+        not candidate
+        or "\\" in candidate
+        or any(ord(char) < 33 or ord(char) == 127 for char in candidate)
+    ):
+        return None
+    try:
+        parsed = urlsplit(candidate)
+        hostname = parsed.hostname
+        # Accessing .port also validates malformed and out-of-range ports.
+        parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme.lower() not in ("http", "https")
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or "%" in hostname
+    ):
+        return None
+
+    hostname = hostname.rstrip(".").lower()
+    try:
+        ascii_host = hostname.encode("idna").decode("ascii")
+    except UnicodeError:
+        return None
+    if not ascii_host or len(ascii_host) > 253:
+        return None
+
+    reserved_suffixes = (
+        ".localhost", ".local", ".internal", ".test", ".invalid",
+        ".example", ".home.arpa", ".lan", ".corp",
+    )
+    if ascii_host == "localhost" or ascii_host.endswith(reserved_suffixes):
+        return None
+
+    try:
+        address = ipaddress.ip_address(ascii_host)
+    except ValueError:
+        labels = ascii_host.split(".")
+        if (
+            len(labels) < 2
+            or labels[-1].isdigit()
+            or any(
+                not label
+                or len(label) > 63
+                or not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", label)
+                for label in labels
+            )
+            or all(re.fullmatch(r"(?:0x[0-9a-f]+|[0-9]+)", label) for label in labels)
+        ):
+            return None
+    else:
+        if not address.is_global:
+            return None
+
+    return quote(candidate, safe=":/?#[]@!
+
+class AIClient:
+'()*+,;=%-._~")
+
+
 class AIClient:
     def __init__(self, api_key=None, base_url=None, model=None, provider=None):
         meta_key = os.getenv("MODEL_API_KEY", "")
@@ -121,15 +194,11 @@ class AIClient:
                         url = citation.get("url")
                         if not isinstance(url, str):
                             continue
-                        try:
-                            parsed = urlsplit(url.strip())
-                            if parsed.scheme.lower() not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
-                                continue
-                        except ValueError:
+                        safe_url = normalize_public_http_url(url)
+                        if not safe_url:
                             continue
                         title = html.escape(str(citation.get("title") or url), quote=False)
-                        title = title.replace("[", r"\[").replace("]", r"\]").replace("\n", " ")
-                        safe_url = quote(url.strip(), safe=":/?#[]@!()*+,;=%-._~")
+                        title = title.replace("[", r"\[").replace("]", r"\]").replace("\r", " ").replace("\n", " ")
                         if safe_url not in [entry[1] for entry in citations]:
                             citations.append((title, safe_url))
             if not content:
@@ -256,26 +325,13 @@ class AIClient:
                 url = citation.get("url")
                 if not isinstance(url, str):
                     continue
-                url = url.strip()
-                if not url or any(ord(char) < 32 for char in url):
-                    continue
-                try:
-                    parsed_url = urlsplit(url)
-                    hostname = parsed_url.hostname
-                except ValueError:
-                    continue
-                if (
-                    parsed_url.scheme.lower() not in ("http", "https")
-                    or not hostname
-                    or parsed_url.username
-                    or parsed_url.password
-                ):
+                safe_url = normalize_public_http_url(url)
+                if not safe_url:
                     continue
                 title = str(citation.get("title") or url)
                 title = html.escape(title, quote=False).replace("\\", "\\\\")
                 title = title.replace("[", "\\[").replace("]", "\\]")
                 title = title.replace("\r", " ").replace("\n", " ")
-                safe_url = quote(url, safe=":/?#[]@!$&'()*+,;=%-._~")
                 if safe_url not in [entry[1] for entry in citations]:
                     citations.append((title, safe_url))
             self.last_citations = [
