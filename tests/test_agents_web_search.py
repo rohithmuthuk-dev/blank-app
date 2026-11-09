@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-from agents import AIClient, AIProviderError, NovaOrchestrator, normalize_allowed_domains
+from agents import (AIClient, AIProviderError, NovaOrchestrator, normalize_allowed_domains, normalize_public_http_url)
 
 
 class FakeResponse:
@@ -17,6 +17,17 @@ class FakeResponse:
         if self.usage is not None:
             data["usage"] = self.usage
         return data
+
+
+class FakeMetaResponse:
+    def __init__(self, data):
+        self.data = data
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self.data
 
 
 class AIClientWebSearchTests(unittest.TestCase):
@@ -104,6 +115,10 @@ class AIClientWebSearchTests(unittest.TestCase):
             "annotations": [
                 {"url_citation": {"url": "javascript:alert(1)", "title": "Unsafe"}},
                 {"url_citation": {"url": "data:text/html,hello", "title": "Data URL"}},
+                {"url_citation": {"url": "http://127.0.0.1/admin", "title": "Loopback"}},
+                {"url_citation": {"url": "http://169.254.169.254/latest/meta-data", "title": "Cloud metadata"}},
+                {"url_citation": {"url": "http://127.1/private", "title": "Short IPv4"}},
+                {"url_citation": {"url": "https://router.local/status", "title": "Local network"}},
                 {"url_citation": {"url": "https://safe.example/article", "title": "Safe"}},
             ],
         })
@@ -201,6 +216,76 @@ class ResearchDomainValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "no more than 10"):
             normalize_allowed_domains(domains)
 
+
+class ResearchCitationUrlSafetyTests(unittest.TestCase):
+    def test_accepts_public_http_and_https_urls(self):
+        self.assertEqual(
+            normalize_public_http_url("https://iec.ch/standards?edition=2026"),
+            "https://iec.ch/standards?edition=2026",
+        )
+        self.assertEqual(
+            normalize_public_http_url("http://8.8.8.8/status"),
+            "http://8.8.8.8/status",
+        )
+
+    def test_rejects_private_reserved_and_ambiguous_hosts(self):
+        unsafe = [
+            "http://localhost/",
+            "http://service.local/",
+            "http://api.internal/",
+            "http://printer.home.arpa/",
+            "http://127.0.0.1/",
+            "http://127.1/",
+            "http://2130706433/",
+            "http://0x7f000001/",
+            "http://10.0.0.1/",
+            "http://172.16.0.1/",
+            "http://192.168.1.10/",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://[::1]/",
+            "http://[fe80::1]/",
+            "http://example.com:99999/",
+            "http://user@example.com/",
+            "javascript:alert(1)",
+            "file:///etc/passwd",
+        ]
+        for url in unsafe:
+            with self.subTest(url=url):
+                self.assertIsNone(normalize_public_http_url(url))
+
+    def test_rejects_malformed_urls_and_control_characters(self):
+        for url in (
+            "https://",
+            "https://example.com\\\\@evil.test",
+            "https://example.com/\\nnext",
+        ):
+            with self.subTest(url=url):
+                self.assertIsNone(normalize_public_http_url(url))
+
+    @patch("agents.requests.post")
+    def test_meta_citations_reject_private_and_local_destinations(self, post):
+        post.return_value = FakeMetaResponse({
+            "output_text": "Meta research answer.",
+            "output": [{
+                "type": "message",
+                "content": [{
+                    "type": "output_text",
+                    "text": "Meta research answer.",
+                    "annotations": [
+                        {"url_citation": {"url": "http://10.0.0.5/admin", "title": "Private"}},
+                        {"url_citation": {"url": "https://iec.ch/standards", "title": "IEC"}},
+                    ],
+                }],
+            }, {"type": "web_search_call"}],
+        })
+        client = AIClient(api_key="meta-test", provider="meta")
+        answer = client.chat("system", "research", enable_web_search=True)
+        self.assertIn("IEC", answer)
+        self.assertNotIn("10.0.0.5", answer)
+        self.assertEqual(client.last_citations, [{
+            "title": "IEC",
+            "url": "https://iec.ch/standards",
+        }])
 
 
 class NovaOrchestratorWebSearchTests(unittest.TestCase):
