@@ -129,10 +129,7 @@ def normalize_public_http_url(url):
         if not address.is_global:
             return None
 
-    return quote(candidate, safe=":/?#[]@!
-
-class AIClient:
-'()*+,;=%-._~")
+    return quote(candidate, safe=":/?#[]@!$&'()*+,;=%-._~")
 
 
 class AIClient:
