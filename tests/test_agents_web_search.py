@@ -119,16 +119,16 @@ class AIClientWebSearchTests(unittest.TestCase):
                 {"url_citation": {"url": "http://169.254.169.254/latest/meta-data", "title": "Cloud metadata"}},
                 {"url_citation": {"url": "http://127.1/private", "title": "Short IPv4"}},
                 {"url_citation": {"url": "https://router.local/status", "title": "Local network"}},
-                {"url_citation": {"url": "https://safe.example/article", "title": "Safe"}},
+                {"url_citation": {"url": "https://safe.example.com/article", "title": "Safe"}},
             ],
         })
         answer = self.client.chat("system", "research")
-        self.assertIn("https://safe.example/article", answer)
+        self.assertIn("https://safe.example.com/article", answer)
         self.assertNotIn("javascript:", answer)
         self.assertNotIn("data:text/html", answer)
         self.assertEqual(
             [source["url"] for source in self.client.last_citations],
-            ["https://safe.example/article"],
+            ["https://safe.example.com/article"],
         )
 
     @patch("agents.requests.post")
