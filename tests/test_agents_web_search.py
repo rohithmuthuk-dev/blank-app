@@ -288,6 +288,134 @@ class ResearchCitationUrlSafetyTests(unittest.TestCase):
         }])
 
 
+
+class MetaSearchResultAuditTests(unittest.TestCase):
+    @patch("agents.requests.post")
+    def test_meta_requests_raw_results_with_existing_two_call_cap(self, post):
+        post.return_value = FakeMetaResponse({
+            "output_text": "Grounded answer.",
+            "output": [{"type": "web_search_call", "results": []}],
+        })
+        client = AIClient(api_key="meta-test", provider="meta")
+        client.chat("system", "research", enable_web_search=True)
+        payload = post.call_args.kwargs["json"]
+        self.assertEqual(payload["include"], ["web_search_call.results"])
+        self.assertEqual(payload["max_tool_calls"], 2)
+        self.assertFalse(payload["parallel_tool_calls"])
+
+    @patch("agents.requests.post")
+    def test_meta_keeps_retrieved_hits_separate_from_cited_sources(self, post):
+        post.return_value = FakeMetaResponse({
+            "output_text": "IEC is cited in this answer.",
+            "output": [
+                {
+                    "type": "web_search_call",
+                    "results": [
+                        {
+                            "type": "text_result",
+                            "title": "IEC official page",
+                            "url": "https://iec.ch/standards",
+                            "snippet": "Official IEC standards information.",
+                        },
+                        {
+                            "type": "text_result",
+                            "title": "IEEE result not cited",
+                            "url": "https://ieee.org/standards",
+                            "snippet": "Retrieved but not cited.",
+                        },
+                        {
+                            "type": "text_result",
+                            "title": "Unsafe internal result",
+                            "url": "http://192.168.1.10/admin",
+                            "snippet": "Must be discarded.",
+                        },
+                    ],
+                },
+                {
+                    "type": "message",
+                    "content": [{
+                        "type": "output_text",
+                        "text": "IEC is cited in this answer.",
+                        "annotations": [{
+                            "type": "url_citation",
+                            "url": "https://iec.ch/standards",
+                            "title": "IEC official page",
+                        }],
+                    }],
+                },
+            ],
+        })
+        client = AIClient(api_key="meta-test", provider="meta")
+        client.chat("system", "research", enable_web_search=True)
+        self.assertEqual(len(client.last_citations), 1)
+        self.assertEqual(
+            client.last_search_results,
+            [
+                {
+                    "title": "IEC official page",
+                    "url": "https://iec.ch/standards",
+                    "snippet": "Official IEC standards information.",
+                    "cited": True,
+                },
+                {
+                    "title": "IEEE result not cited",
+                    "url": "https://ieee.org/standards",
+                    "snippet": "Retrieved but not cited.",
+                    "cited": False,
+                },
+            ],
+        )
+
+    @patch("agents.requests.post")
+    def test_meta_search_result_text_is_bounded(self, post):
+        post.return_value = FakeMetaResponse({
+            "output_text": "Answer.",
+            "output": [{
+                "type": "web_search_call",
+                "results": [{
+                    "title": "T" * 300,
+                    "url": "https://example.com/result",
+                    "snippet": "S" * 1500,
+                }],
+            }],
+        })
+        client = AIClient(api_key="meta-test", provider="meta")
+        client.chat("system", "research", enable_web_search=True)
+        self.assertEqual(len(client.last_search_results[0]["title"]), 240)
+        self.assertEqual(len(client.last_search_results[0]["snippet"]), 1000)
+
+    @patch("agents.requests.post")
+    def test_meta_search_results_are_reset_for_non_search_request(self, post):
+        post.side_effect = [
+            FakeMetaResponse({
+                "output_text": "Searched.",
+                "output": [{
+                    "type": "web_search_call",
+                    "results": [{
+                        "title": "Source",
+                        "url": "https://example.com",
+                        "snippet": "Snippet",
+                    }],
+                }],
+            }),
+            FakeMetaResponse({"output_text": "Ordinary answer.", "output": []}),
+        ]
+        client = AIClient(api_key="meta-test", provider="meta")
+        client.chat("system", "research", enable_web_search=True)
+        self.assertEqual(len(client.last_search_results), 1)
+        client.chat("system", "hello", enable_web_search=False)
+        self.assertEqual(client.last_search_results, [])
+
+    @patch("agents.requests.post")
+    def test_meta_does_not_request_raw_results_when_search_is_disabled(self, post):
+        post.return_value = FakeMetaResponse({"output_text": "Ordinary answer.", "output": []})
+        client = AIClient(api_key="meta-test", provider="meta")
+        client.chat("system", "hello", enable_web_search=False)
+        payload = post.call_args.kwargs["json"]
+        self.assertNotIn("include", payload)
+        self.assertNotIn("tools", payload)
+
+
 class NovaOrchestratorWebSearchTests(unittest.TestCase):
     class FakeClient:
         def __init__(self):
