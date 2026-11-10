@@ -274,6 +274,7 @@ if st.session_state.get("nova_results"):
         st.caption("Research restricted to: " + ", ".join(applied_domains))
     search_usage = result.get("web_search_usage")
     research_sources = result.get("research_sources") or []
+    research_results = result.get("research_results") or []
     if search_usage:
         if search_usage["reported"] and search_usage["requests"] > 0:
             st.caption(
@@ -300,6 +301,22 @@ if st.session_state.get("nova_results"):
                 "The provider did not return a verifiable search-usage count. "
                 "Do not assume live search occurred; check its activity or billing page."
             )
+    if research_results:
+        with st.expander(f"Search results reviewed ({len(research_results)})"):
+            st.caption(
+                "Raw hits returned by Meta search grounding. Retrieved results are not automatically citations; "
+                "snippets are untrusted excerpts."
+            )
+            for index, source in enumerate(research_results, start=1):
+                title = str(source.get("title") or source.get("url") or "Search result")
+                url = str(source.get("url") or "")
+                st.text(f"{index}. {title}")
+                if url.startswith(("https://", "http://")):
+                    st.markdown(f"[Open source](<{url}>)")
+                st.caption("Cited in the answer" if source.get("cited") else "Retrieved by search; not cited")
+                snippet = str(source.get("snippet") or "")
+                if snippet:
+                    st.text(snippet)
     if research_sources:
         with st.expander(f"Open research sources ({len(research_sources)})"):
             for source in research_sources:
@@ -309,7 +326,7 @@ if st.session_state.get("nova_results"):
                     st.markdown(f"- [{title}](<{url}>)")
     with st.expander("See agent activity"):
         for key, value in result.items():
-            if key not in ("final", "web_search_usage", "research_sources"):
+            if key not in ("final", "web_search_usage", "research_sources", "research_results"):
                 label = key.replace("custom_", "").replace("_", " ").title()
                 st.markdown(f"**{label} Agent**")
                 st.markdown(value)
