@@ -150,11 +150,15 @@ class AIClient:
         )
         # Structured, validated citations from the most recent model request.
         self.last_citations = []
+        # Raw search hits are kept separately from citations actually used in the answer.
+        self.last_search_results = []
 
     def _meta_chat(self, system: str, user: str, enable_web_search: bool = False) -> str:
         payload = {"model": self.model, "instructions": system, "input": user}
         if enable_web_search:
             payload["tools"] = [{"type": "web_search", "search_context_size": "low"}]
+            # Request raw hits separately from the smaller subset cited in answer text.
+            payload["include"] = ["web_search_call.results"]
             # Meta documents max_tool_calls as a hard cap across built-in tools.
             # Keep search sequential and cap the whole research request at two calls.
             payload["max_tool_calls"] = 2
@@ -170,6 +174,7 @@ class AIClient:
             data = response.json()
             content = str(data.get("output_text") or "").strip()
             citations = []
+            search_results = []
             output_items = data.get("output")
             search_tool_calls = 0
             if enable_web_search and isinstance(output_items, list):
@@ -181,6 +186,19 @@ class AIClient:
                     continue
                 if item.get("type") == "web_search_call":
                     search_tool_calls += 1
+                    for raw_result in item.get("results") or []:
+                        if not isinstance(raw_result, dict):
+                            continue
+                        result_url = normalize_public_http_url(raw_result.get("url"))
+                        if not result_url or result_url in [entry["url"] for entry in search_results]:
+                            continue
+                        result_title = str(raw_result.get("title") or result_url).strip()[:240]
+                        result_snippet = str(raw_result.get("snippet") or "").strip()[:1000]
+                        search_results.append({
+                            "title": result_title,
+                            "url": result_url,
+                            "snippet": result_snippet,
+                        })
                 for block in item.get("content") or []:
                     if not isinstance(block, dict):
                         continue
@@ -211,6 +229,11 @@ class AIClient:
             self.last_citations = [
                 {"title": title, "url": url} for title, url in citations
             ]
+            cited_urls = {url for _, url in citations}
+            self.last_search_results = [
+                {**result, "cited": result["url"] in cited_urls}
+                for result in search_results
+            ]
             if citations:
                 content += "\n\n**Web sources**\n" + "\n".join(f"- [{title}](<{url}>)" for title, url in citations)
             if not content:
@@ -225,6 +248,7 @@ class AIClient:
     def chat(self, system: str, user: str, temperature: float = 0.4,
              enable_web_search: bool = False, allowed_domains=None) -> str:
         self.last_citations = []
+        self.last_search_results = []
         if not self.api_key:
             key_name = "MODEL_API_KEY" if self.provider == "meta" else "OPENROUTER_API_KEY"
             raise AIProviderError(f"Add {key_name} in Streamlit app Secrets.")
@@ -414,6 +438,11 @@ class NovaOrchestrator:
                 # client's per-request citation list.
                 out["research_sources"] = list(
                     getattr(self.client, "last_citations", []) or []
+                )
+                # Keep provider-retrieved hits distinct from citations actually
+                # attached to the answer so the UI does not overstate provenance.
+                out["research_results"] = list(
+                    getattr(self.client, "last_search_results", []) or []
                 )
         if any(word in lower for word in ("code", "software", "program", "develop", "build")):
             self.progress("Coding Agent is working…")
