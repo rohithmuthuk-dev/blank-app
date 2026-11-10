@@ -421,6 +421,7 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
         def __init__(self):
             self.calls = []
             self.last_citations = []
+            self.last_search_results = []
             self.responses = [
                 "Plan: research this topic and cite sources.",
                 "Research findings.",
@@ -436,6 +437,15 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
             })
             self.last_citations = (
                 [{"title": "Official source", "url": "https://iec.ch"}]
+                if enable_web_search else []
+            )
+            self.last_search_results = (
+                [{
+                    "title": "Retrieved official source",
+                    "url": "https://iec.ch",
+                    "snippet": "Raw search excerpt.",
+                    "cited": True,
+                }]
                 if enable_web_search else []
             )
             return self.responses[len(self.calls) - 1]
@@ -456,6 +466,19 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
         self.assertEqual(result["research_sources"], [{
             "title": "Official source",
             "url": "https://iec.ch",
+        }])
+
+
+    def test_orchestrator_preserves_raw_research_results_for_ui_audit(self):
+        client = self.FakeClient()
+        result = NovaOrchestrator(client).run(
+            "Research this topic", enable_web_search=True
+        )
+        self.assertEqual(result["research_results"], [{
+            "title": "Retrieved official source",
+            "url": "https://iec.ch",
+            "snippet": "Raw search excerpt.",
+            "cited": True,
         }])
 
     def test_researcher_has_no_web_search_when_toggle_is_off(self):
