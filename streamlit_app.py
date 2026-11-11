@@ -8,6 +8,7 @@ from pypdf import PdfReader
 import streamlit as st
 from agents import AIClient, AIProviderError, NovaOrchestrator, normalize_allowed_domains
 from electrical_domain import EQUIPMENT, DELIVERABLES, build_workbench_prompt
+from research_report import build_research_evidence_report
 
 DB_PATH = Path("nova_memory.db")
 st.set_page_config(page_title="NOVA Electrical AI", page_icon="⚡", layout="centered")
@@ -241,6 +242,9 @@ if st.button(
             allowed_domains=allowed_domains or None,
         )
         if enable_web_search:
+            # Keep only the user's task text in the export; do not copy uploaded
+            # PDF extracts or provider credentials into the evidence report.
+            result["research_task"] = task.strip()
             result["research_provider"] = provider
             result["web_search_domain_filter"] = allowed_domains
             result["web_search_usage"] = {
@@ -269,6 +273,16 @@ if st.session_state.get("nova_results"):
         file_name="nova_electrical_ai_draft.md",
         mime="text/markdown",
     )
+    if result.get("web_search_usage"):
+        st.download_button(
+            "⬇️ Download research evidence report",
+            data=build_research_evidence_report(
+                result.get("research_task", ""), result
+            ),
+            file_name="nova_research_evidence_report.md",
+            mime="text/markdown",
+            key="download_research_evidence_report",
+        )
     applied_domains = result.get("web_search_domain_filter") or []
     if applied_domains:
         st.caption("Research restricted to: " + ", ".join(applied_domains))
