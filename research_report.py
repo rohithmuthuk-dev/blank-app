@@ -95,6 +95,21 @@ def build_research_evidence_report(task, result, generated_at=None):
             "Do not assume live search occurred."
         )
 
+    verification_note = _clean_text(result.get("research_verification_note"), 1200)
+    lines.extend(["", "## Research verification status"])
+    lines.append(
+        verification_note
+        or "No Researcher-time verification status was captured; do not assume live search occurred."
+    )
+
+    lines.extend(["", "## Electrical engineering verification checklist"])
+    lines.extend([
+        "- [ ] Confirm the exact standard number, edition, amendments and clause in the approved source copy.",
+        "- [ ] Separate normative requirements from informative guidance, manufacturer instructions and project or utility specifications.",
+        "- [ ] Verify every numerical acceptance limit against the approved project, utility and manufacturer documents.",
+        "- [ ] Do not derive relay settings, CT/VT limits, trip logic or pass/fail decisions from search snippets alone.",
+    ])
+
     lines.extend(["", "## Sources cited in the Researcher answer"])
     if citations:
         for source in citations:
