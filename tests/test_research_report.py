@@ -31,6 +31,17 @@ class ResearchEvidenceReportTests(unittest.TestCase):
         self.assertIn("Enforced domain allowlist: iec\\.ch, ieee\\.org", report)
         self.assertIn("Reviewed answer.", report)
 
+    def test_report_includes_verification_status_and_engineering_checklist(self):
+        result = dict(self.result)
+        result["research_verification_note"] = (
+            "WEB-RESEARCH STATUS: SEARCH ACTIVITY CONFIRMED WITH 1 USABLE CITATION."
+        )
+        report = build_research_evidence_report("Research", result)
+        self.assertIn("Research verification status", report)
+        self.assertIn("SEARCH ACTIVITY CONFIRMED", report)
+        self.assertIn("Confirm the exact standard number", report)
+        self.assertIn("Do not derive relay settings", report)
+
     def test_report_distinguishes_retrieved_hits_from_citations(self):
         result = dict(self.result)
         result["research_results"] = [
