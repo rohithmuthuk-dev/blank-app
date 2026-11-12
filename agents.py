@@ -132,6 +132,57 @@ def normalize_public_http_url(url):
     return quote(candidate, safe=":/?#[]@!$&'()*+,;=%-._~")
 
 
+def build_research_verification_note(usage, citations):
+    """Describe only what the selected provider actually confirmed."""
+    usable_citations = []
+    for item in citations if isinstance(citations, list) else []:
+        if isinstance(item, dict) and normalize_public_http_url(item.get("url")):
+            usable_citations.append(item)
+
+    citation_count = len(usable_citations)
+    if not isinstance(usage, dict) or usage.get("reported") is not True:
+        return (
+            "WEB-RESEARCH STATUS: UNCONFIRMED. The provider did not return verifiable "
+            "search-usage metadata. Do not claim that live search occurred or describe "
+            "current claims as web-verified."
+        )
+
+    raw_count = usage.get("requests")
+    try:
+        count = int(raw_count)
+        if isinstance(raw_count, bool) or count < 0:
+            raise ValueError("invalid search count")
+    except (TypeError, ValueError):
+        return (
+            "WEB-RESEARCH STATUS: UNCONFIRMED. The provider marked usage as reported "
+            "but returned an invalid search count. Do not claim that live search occurred."
+        )
+
+    label = str(usage.get("label") or "search requests")
+    if count == 0 and citation_count:
+        return (
+            "WEB-RESEARCH STATUS: INCONSISTENT PROVIDER METADATA. The provider reported "
+            "zero search-tool calls but also returned usable citations. Do not claim a "
+            "confirmed live search; disclose this discrepancy."
+        )
+    if count == 0:
+        return (
+            "WEB-RESEARCH STATUS: NO LIVE SEARCH. The provider confirmed that it did not "
+            "invoke web search. Explicitly state that current information is not web-verified."
+        )
+    if citation_count == 0:
+        return (
+            f"WEB-RESEARCH STATUS: SEARCH ACTIVITY CONFIRMED ({count} {label}), BUT NO "
+            "USABLE CITATIONS WERE RETURNED. Do not present the answer as independently "
+            "source-verified; explain the missing evidence."
+        )
+    return (
+        f"WEB-RESEARCH STATUS: SEARCH ACTIVITY CONFIRMED ({count} {label}) WITH "
+        f"{citation_count} USABLE CITATION(S). Cite the returned sources for supported "
+        "claims, but do not imply that NOVA independently validated the source contents."
+    )
+
+
 class AIClient:
     def __init__(self, api_key=None, base_url=None, model=None, provider=None):
         meta_key = os.getenv("MODEL_API_KEY", "")
@@ -249,6 +300,10 @@ class AIClient:
              enable_web_search: bool = False, allowed_domains=None) -> str:
         self.last_citations = []
         self.last_search_results = []
+        if enable_web_search:
+            # Usage belongs to this Researcher request, not previous requests.
+            self.web_search_requests_total = 0
+            self.web_search_usage_reported = False
         if not self.api_key:
             key_name = "MODEL_API_KEY" if self.provider == "meta" else "OPENROUTER_API_KEY"
             raise AIProviderError(f"Add {key_name} in Streamlit app Secrets.")
@@ -443,6 +498,22 @@ class NovaOrchestrator:
                 # attached to the answer so the UI does not overstate provenance.
                 out["research_results"] = list(
                     getattr(self.client, "last_search_results", []) or []
+                )
+                usage_count = getattr(self.client, "web_search_requests_total", 0)
+                try:
+                    usage_count = int(usage_count)
+                    if isinstance(usage_count, bool) or usage_count < 0:
+                        usage_count = 0
+                except (TypeError, ValueError):
+                    usage_count = 0
+                out["research_usage"] = {
+                    "reported": bool(getattr(self.client, "web_search_usage_reported", False)),
+                    "requests": usage_count,
+                    "label": getattr(self.client, "web_search_usage_label", "search requests"),
+                }
+                # Snapshot and pass this deterministic status to Analyst and Reviewer.
+                out["research_verification_note"] = build_research_verification_note(
+                    out["research_usage"], out["research_sources"]
                 )
         if any(word in lower for word in ("code", "software", "program", "develop", "build")):
             self.progress("Coding Agent is working…")
