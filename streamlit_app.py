@@ -247,11 +247,12 @@ if st.button(
             result["research_task"] = task.strip()
             result["research_provider"] = provider
             result["web_search_domain_filter"] = allowed_domains
-            result["web_search_usage"] = {
+            # Use the Researcher-time snapshot; later synthesis calls must not alter it.
+            result["web_search_usage"] = dict(result.get("research_usage") or {
                 "reported": client.web_search_usage_reported,
                 "requests": client.web_search_requests_total,
                 "label": client.web_search_usage_label,
-            }
+            })
         status.update(label="NOVA finished its review", state="complete", expanded=False)
         st.session_state["nova_results"] = result
         remember(task.strip(), result["final"])
@@ -286,6 +287,9 @@ if st.session_state.get("nova_results"):
     applied_domains = result.get("web_search_domain_filter") or []
     if applied_domains:
         st.caption("Research restricted to: " + ", ".join(applied_domains))
+    verification_note = result.get("research_verification_note")
+    if verification_note:
+        st.info(verification_note)
     search_usage = result.get("web_search_usage")
     research_sources = result.get("research_sources") or []
     research_results = result.get("research_results") or []
@@ -340,7 +344,11 @@ if st.session_state.get("nova_results"):
                     st.markdown(f"- [{title}](<{url}>)")
     with st.expander("See agent activity"):
         for key, value in result.items():
-            if key not in ("final", "web_search_usage", "research_sources", "research_results"):
+            if key not in (
+                "final", "web_search_usage", "research_usage", "research_verification_note",
+                "research_sources", "research_results", "research_provider",
+                "research_task", "web_search_domain_filter",
+            ):
                 label = key.replace("custom_", "").replace("_", " ").title()
                 st.markdown(f"**{label} Agent**")
                 st.markdown(value)
