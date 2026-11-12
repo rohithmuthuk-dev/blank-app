@@ -1,7 +1,10 @@
 import unittest
 from unittest.mock import patch
 
-from agents import (AIClient, AIProviderError, NovaOrchestrator, normalize_allowed_domains, normalize_public_http_url)
+from agents import (
+    AIClient, AIProviderError, NovaOrchestrator, build_research_verification_note,
+    normalize_allowed_domains, normalize_public_http_url,
+)
 
 
 class FakeResponse:
@@ -180,6 +183,46 @@ class AIClientWebSearchTests(unittest.TestCase):
         post.return_value = FakeResponse({"content": "Answer"})
         self.client.chat("system", "research", enable_web_search=True)
         self.assertFalse(self.client.web_search_usage_reported)
+
+    @patch("agents.requests.post")
+    def test_usage_metadata_resets_between_research_requests(self, post):
+        post.side_effect = [
+            FakeResponse(
+                {"content": "First answer"},
+                usage={"server_tool_use_details": {"web_search_requests": 2}},
+            ),
+            FakeResponse({"content": "Second answer"}),
+        ]
+        self.client.chat("system", "first", enable_web_search=True)
+        self.assertTrue(self.client.web_search_usage_reported)
+        self.assertEqual(self.client.web_search_requests_total, 2)
+
+        self.client.chat("system", "second", enable_web_search=True)
+        self.assertFalse(self.client.web_search_usage_reported)
+        self.assertEqual(self.client.web_search_requests_total, 0)
+
+    def test_research_verification_note_distinguishes_provider_states(self):
+        citation = [{"title": "IEC", "url": "https://iec.ch"}]
+        self.assertIn(
+            "UNCONFIRMED",
+            build_research_verification_note({"reported": False, "requests": 0}, citation),
+        )
+        self.assertIn(
+            "NO LIVE SEARCH",
+            build_research_verification_note({"reported": True, "requests": 0}, []),
+        )
+        self.assertIn(
+            "INCONSISTENT",
+            build_research_verification_note({"reported": True, "requests": 0}, citation),
+        )
+        self.assertIn(
+            "NO USABLE CITATIONS",
+            build_research_verification_note({"reported": True, "requests": 1}, []),
+        )
+        self.assertIn(
+            "SEARCH ACTIVITY CONFIRMED",
+            build_research_verification_note({"reported": True, "requests": 1}, citation),
+        )
 
     def test_missing_key_fails_before_network_request(self):
         client = AIClient(api_key="")
@@ -422,6 +465,9 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
             self.calls = []
             self.last_citations = []
             self.last_search_results = []
+            self.web_search_usage_reported = False
+            self.web_search_requests_total = 0
+            self.web_search_usage_label = "search requests"
             self.responses = [
                 "Plan: research this topic and cite sources.",
                 "Research findings.",
@@ -432,9 +478,13 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
         def chat(self, system, user, temperature=0.4, enable_web_search=False, allowed_domains=None):
             self.calls.append({
                 "system": system,
+                "user": user,
                 "enable_web_search": enable_web_search,
                 "allowed_domains": allowed_domains,
             })
+            # Simulate later non-search agents mutating shared client state.
+            self.web_search_usage_reported = bool(enable_web_search)
+            self.web_search_requests_total = 1 if enable_web_search else 0
             self.last_citations = (
                 [{"title": "Official source", "url": "https://iec.ch"}]
                 if enable_web_search else []
@@ -467,6 +517,14 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
             "title": "Official source",
             "url": "https://iec.ch",
         }])
+        self.assertEqual(result["research_usage"], {
+            "reported": True,
+            "requests": 1,
+            "label": "search requests",
+        })
+        self.assertIn("SEARCH ACTIVITY CONFIRMED", result["research_verification_note"])
+        self.assertIn("SEARCH ACTIVITY CONFIRMED", client.calls[2]["user"])
+        self.assertIn("SEARCH ACTIVITY CONFIRMED", client.calls[3]["user"])
 
 
     def test_orchestrator_preserves_raw_research_results_for_ui_audit(self):
