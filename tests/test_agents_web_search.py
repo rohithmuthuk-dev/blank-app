@@ -248,6 +248,14 @@ class ResearchDomainValidationTests(unittest.TestCase):
             "localhost",
             "intranet.local",
             "*.example.com",
+            "source.example",
+            "router.home.arpa",
+            "device.lan",
+            "server.corp",
+            "hidden.onion",
+            "0177.0.0.1",
+            "0x7f.0.0.1",
+            "example.123",
         ]
         for domain in invalid:
             with self.subTest(domain=domain):
@@ -255,7 +263,7 @@ class ResearchDomainValidationTests(unittest.TestCase):
                     normalize_allowed_domains(domain)
 
     def test_rejects_more_than_ten_domains(self):
-        domains = [f"source{i}.example" for i in range(11)]
+        domains = [f"source{i}.example.com" for i in range(11)]
         with self.assertRaisesRegex(ValueError, "no more than 10"):
             normalize_allowed_domains(domains)
 
