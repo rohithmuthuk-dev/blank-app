@@ -47,8 +47,19 @@ def normalize_allowed_domains(domains):
             for label in labels
         ):
             raise ValueError(f"Invalid domain hostname: {domain}")
-        if labels[-1] in {"local", "localhost", "internal", "test", "invalid"}:
+        reserved_suffixes = (
+            ".localhost", ".local", ".internal", ".test", ".invalid",
+            ".example", ".arpa", ".lan", ".corp", ".onion",
+        )
+        if ascii_domain == "localhost" or ascii_domain.endswith(reserved_suffixes):
             raise ValueError(f"Private or reserved domains are not allowed: {domain}")
+        # Numeric final labels and legacy numeric IPv4 spellings are not
+        # public DNS hostnames. Reject them before they reach a search filter.
+        if labels[-1].isdigit() or all(
+            re.fullmatch(r"(?:0x[0-9a-f]+|[0-9]+)", label)
+            for label in labels
+        ):
+            raise ValueError(f"Ambiguous numeric hosts are not allowed: {domain}")
         try:
             ipaddress.ip_address(ascii_domain)
         except ValueError:
