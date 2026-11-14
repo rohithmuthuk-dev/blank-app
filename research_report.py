@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from datetime import datetime, timezone
 
-from agents import normalize_public_http_url
+from agents import RESEARCH_MODE_LABELS, normalize_public_http_url
 
 
 def _clean_text(value, limit=4000):
@@ -69,6 +69,17 @@ def build_research_evidence_report(task, result, generated_at=None):
         f"- Provider: {_escape_markdown(provider)}",
         f"- Task: {_escape_markdown(task)}",
     ]
+    research_mode = result.get("research_mode")
+    mode_label = (
+        RESEARCH_MODE_LABELS.get(research_mode, "Focused lookup")
+        if isinstance(research_mode, str) else "Focused lookup"
+    )
+    lines.append(f"- Research approach: {_escape_markdown(mode_label)}")
+    if research_mode == "comparative":
+        lines.append(
+            "- Search limits: existing provider-enforced search/fetch limits are unchanged; "
+            "comparative mode does not request extra tool calls."
+        )
     if isinstance(domains, (list, tuple)) and domains:
         lines.append("- Enforced domain allowlist: " + ", ".join(
             _escape_markdown(domain) for domain in domains[:10]
