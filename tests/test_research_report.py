@@ -42,6 +42,14 @@ class ResearchEvidenceReportTests(unittest.TestCase):
         self.assertIn("Confirm the exact standard number", report)
         self.assertIn("Do not derive relay settings", report)
 
+    def test_report_records_comparative_mode_without_expanding_search_budget(self):
+        result = dict(self.result)
+        result["research_mode"] = "comparative"
+        report = build_research_evidence_report("Compare IEC sources", result)
+        self.assertIn("Research approach: Comparative source review", report)
+        self.assertIn("existing provider-enforced search/fetch limits are unchanged", report)
+        self.assertIn("does not request extra tool calls", report)
+
     def test_report_distinguishes_retrieved_hits_from_citations(self):
         result = dict(self.result)
         result["research_results"] = [
