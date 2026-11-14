@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from agents import (
     AIClient, AIProviderError, NovaOrchestrator, build_research_verification_note,
-    normalize_allowed_domains, normalize_public_http_url,
+    normalize_allowed_domains, normalize_public_http_url, normalize_research_mode,
 )
 
 
@@ -228,6 +228,16 @@ class AIClientWebSearchTests(unittest.TestCase):
         client = AIClient(api_key="")
         with self.assertRaises(AIProviderError):
             client.chat("system", "hello")
+
+
+class ResearchModeValidationTests(unittest.TestCase):
+    def test_supported_modes_are_normalized(self):
+        self.assertEqual(normalize_research_mode(" FOCUSED "), "focused")
+        self.assertEqual(normalize_research_mode("Comparative"), "comparative")
+
+    def test_unknown_mode_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "focused or comparative"):
+            normalize_research_mode("unlimited")
 
 
 class ResearchDomainValidationTests(unittest.TestCase):
@@ -546,6 +556,43 @@ class NovaOrchestratorWebSearchTests(unittest.TestCase):
             "snippet": "Raw search excerpt.",
             "cited": True,
         }])
+
+    def test_comparative_mode_uses_existing_researcher_call_and_limits(self):
+        client = self.FakeClient()
+        result = NovaOrchestrator(client).run(
+            "Compare official technical sources",
+            enable_web_search=True,
+            research_mode="comparative",
+        )
+        self.assertEqual(len(client.calls), 4)
+        self.assertEqual(
+            [call["enable_web_search"] for call in client.calls],
+            [False, True, False, False],
+        )
+        self.assertIn("COMPARATIVE SOURCE REVIEW", client.calls[1]["user"])
+        self.assertIn("provider-enforced search and fetch limits", client.calls[1]["user"])
+        self.assertEqual(result["research_mode"], "comparative")
+        self.assertIn("research_mode", client.calls[2]["user"])
+        self.assertIn("comparative", client.calls[2]["user"].lower())
+
+    def test_focused_mode_is_the_default(self):
+        client = self.FakeClient()
+        result = NovaOrchestrator(client).run(
+            "Find one official source", enable_web_search=True
+        )
+        self.assertEqual(result["research_mode"], "focused")
+        self.assertIn("FOCUSED LOOKUP", client.calls[1]["user"])
+        self.assertNotIn("COMPARATIVE SOURCE REVIEW", client.calls[1]["user"])
+
+    def test_invalid_mode_is_rejected_before_provider_calls(self):
+        client = self.FakeClient()
+        with self.assertRaisesRegex(ValueError, "focused or comparative"):
+            NovaOrchestrator(client).run(
+                "Research this topic",
+                enable_web_search=True,
+                research_mode="unlimited",
+            )
+        self.assertEqual(client.calls, [])
 
     def test_researcher_has_no_web_search_when_toggle_is_off(self):
         client = self.FakeClient()
