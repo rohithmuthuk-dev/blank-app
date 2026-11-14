@@ -6,7 +6,10 @@ from pathlib import Path
 import speech_recognition as sr
 from pypdf import PdfReader
 import streamlit as st
-from agents import AIClient, AIProviderError, NovaOrchestrator, normalize_allowed_domains
+from agents import (
+    AIClient, AIProviderError, NovaOrchestrator, RESEARCH_MODE_LABELS,
+    normalize_allowed_domains,
+)
 from electrical_domain import EQUIPMENT, DELIVERABLES, build_workbench_prompt
 from research_report import build_research_evidence_report
 
@@ -191,6 +194,18 @@ enable_web_search = st.checkbox(
     value=False,
     help="Meta: at most 2 built-in web-search calls. OpenRouter: Exa search is limited to 2 requests, 10 total results, and a $0.014 server-tool spend stop; search and fetch share a 2-step cap. Model-token costs are separate. Leave off for ordinary tasks.",
 )
+research_mode = "focused"
+if enable_web_search:
+    research_mode = st.selectbox(
+        "Research approach",
+        options=["focused", "comparative"],
+        format_func=lambda mode: RESEARCH_MODE_LABELS[mode],
+        help=(
+            "Comparative source review asks the same Researcher request to compare "
+            "independent primary sources and flag conflicts. Provider search/fetch limits "
+            "do not increase; model-token usage may vary."
+        ),
+    )
 allowed_domains = []
 domain_filter_error = None
 if enable_web_search and selected_provider == "openrouter":
@@ -240,8 +255,10 @@ if st.button(
             task_with_documents, memory(), enable_web_search=enable_web_search,
             custom_agents=chosen_agents,
             allowed_domains=allowed_domains or None,
+            research_mode=research_mode,
         )
         if enable_web_search:
+            result["research_mode"] = research_mode
             # Keep only the user's task text in the export; do not copy uploaded
             # PDF extracts or provider credentials into the evidence report.
             result["research_task"] = task.strip()
@@ -284,6 +301,9 @@ if st.session_state.get("nova_results"):
             mime="text/markdown",
             key="download_research_evidence_report",
         )
+    research_mode = result.get("research_mode")
+    if isinstance(research_mode, str) and research_mode in RESEARCH_MODE_LABELS:
+        st.caption("Research approach: " + RESEARCH_MODE_LABELS[research_mode])
     applied_domains = result.get("web_search_domain_filter") or []
     if applied_domains:
         st.caption("Research restricted to: " + ", ".join(applied_domains))
@@ -347,7 +367,7 @@ if st.session_state.get("nova_results"):
             if key not in (
                 "final", "web_search_usage", "research_usage", "research_verification_note",
                 "research_sources", "research_results", "research_provider",
-                "research_task", "web_search_domain_filter",
+                "research_task", "research_mode", "web_search_domain_filter",
             ):
                 label = key.replace("custom_", "").replace("_", " ").title()
                 st.markdown(f"**{label} Agent**")
