@@ -229,9 +229,24 @@ def build_research_verification_note(usage, citations):
 
 class AIClient:
     def __init__(self, api_key=None, base_url=None, model=None, provider=None):
-        meta_key = os.getenv("MODEL_API_KEY", "")
-        self.provider = provider or ("meta" if meta_key else "openrouter")
-        self.api_key = api_key or meta_key or os.getenv("OPENROUTER_API_KEY") or os.getenv("AI_API_KEY", "")
+        meta_key = os.getenv("MODEL_API_KEY", "").strip()
+        default_provider = "meta" if meta_key else "openrouter"
+        self.provider = str(provider or default_provider).strip().lower()
+        if self.provider not in ("meta", "openrouter"):
+            raise ValueError("Provider must be either 'meta' or 'openrouter'.")
+
+        # Never fall back across providers: a Meta key must not be sent to
+        # OpenRouter, or an OpenRouter key to Meta. An explicit api_key,
+        # including an empty string, takes precedence over environment lookup.
+        if api_key is not None:
+            self.api_key = str(api_key).strip()
+        elif self.provider == "meta":
+            self.api_key = meta_key
+        else:
+            self.api_key = (
+                os.getenv("OPENROUTER_API_KEY", "").strip()
+                or os.getenv("AI_API_KEY", "").strip()
+            )
         default_base = "https://api.meta.ai/v1" if self.provider == "meta" else DEFAULT_BASE_URL
         default_model = "muse-spark-1.3" if self.provider == "meta" else DEFAULT_MODEL
         env_base = os.getenv("META_BASE_URL") if self.provider == "meta" else os.getenv("AI_BASE_URL")
