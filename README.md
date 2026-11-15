@@ -7,7 +7,7 @@ NOVA helps engineers prepare test procedures, FAT/SAT plans, commissioning check
 ## Hackathon build
 
 - Meta Model API (Muse Spark 1.3) integration using the official OpenAI-compatible Responses API.
-- OpenRouter remains available as a fallback provider.
+- OpenRouter remains available as an independently selectable provider; when both keys are configured, choose the provider in the sidebar.
 - Tamil, colloquial Tamil-English and English instructions.
 - Electrical workbench for equipment, deliverable, work stage, voltage class, manufacturer/model and project details.
 - Optional text-based PDF reference upload (up to 3 files, 25 pages and 12,000 extracted characters per file) with filename/page context.
@@ -36,7 +36,7 @@ META_BASE_URL = "https://api.meta.ai/v1"
 META_MODEL = "muse-spark-1.3"
 ```
 
-NOVA prefers Meta Model API whenever `MODEL_API_KEY` is configured. To use OpenRouter instead, omit `MODEL_API_KEY` and configure:
+If only one provider key is configured, NOVA selects that provider automatically. If both `MODEL_API_KEY` and `OPENROUTER_API_KEY` are configured, choose Meta Model API or OpenRouter from the sidebar before running a task. Each provider receives only its own credential; NOVA never falls back to sending one provider's key to the other. To use OpenRouter alone, configure:
 
 ```toml
 OPENROUTER_API_KEY = "your-openrouter-key"
