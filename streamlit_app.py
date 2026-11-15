@@ -53,20 +53,41 @@ def secret(key, default=""):
         return default
 
 
-selected_provider = "meta" if secret("MODEL_API_KEY") else "openrouter"
-
 st.markdown(
     '<div class="nova-hero"><h1>⚡ NOVA Electrical AI</h1><b>AI-Powered Testing & Commissioning Assistant</b><p>Substations · Protection systems · IEC-aware guidance · Tamil + English</p></div>',
     unsafe_allow_html=True,
 )
 with st.sidebar:
     st.subheader("AI provider")
-    st.caption("Meta Model API is preferred for the hackathon. Add keys in Streamlit Settings → Secrets. Never commit API keys.")
+    st.caption("Configure provider keys in Streamlit Settings → Secrets. NOVA keeps each provider's credential separate; never commit API keys.")
     st.code(
-        'MODEL_API_KEY = "your-meta-model-api-key"\n# Optional fallback\nOPENROUTER_API_KEY = "your-openrouter-key"',
+        'MODEL_API_KEY = "your-meta-model-api-key"\nOPENROUTER_API_KEY = "your-openrouter-key"',
         language="toml",
     )
-    st.caption("When MODEL_API_KEY is present, NOVA uses Meta Muse Spark 1.3. Otherwise it uses your OpenRouter configuration. Live research uses the selected provider's supported search tool.")
+    meta_key_configured = bool(secret("MODEL_API_KEY").strip())
+    openrouter_key_configured = bool(
+        secret("OPENROUTER_API_KEY").strip() or secret("AI_API_KEY").strip()
+    )
+    if meta_key_configured and openrouter_key_configured:
+        selected_provider = st.selectbox(
+            "Choose AI provider",
+            options=["meta", "openrouter"],
+            format_func=lambda value: (
+                "Meta Model API (Muse Spark 1.3)"
+                if value == "meta" else "OpenRouter"
+            ),
+            help="Both providers are configured. Choose which provider and its own API key NOVA should use for this run.",
+        )
+    elif meta_key_configured:
+        selected_provider = "meta"
+        st.caption("Selected provider: Meta Model API (Muse Spark 1.3).")
+    elif openrouter_key_configured:
+        selected_provider = "openrouter"
+        st.caption("Selected provider: OpenRouter.")
+    else:
+        selected_provider = "openrouter"
+        st.warning("Add MODEL_API_KEY or OPENROUTER_API_KEY in Streamlit Secrets to connect NOVA.")
+    st.caption("Live research uses the selected provider's supported search tool. Search is optional and off by default.")
     if st.button("Clear saved memory"):
         with db() as c:
             c.execute("DELETE FROM conversations")
