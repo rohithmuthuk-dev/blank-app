@@ -230,6 +230,71 @@ class AIClientWebSearchTests(unittest.TestCase):
             client.chat("system", "hello")
 
 
+class ProviderCredentialRoutingTests(unittest.TestCase):
+    def test_explicit_openrouter_uses_its_own_key_when_both_are_configured(self):
+        with patch.dict("os.environ", {
+            "MODEL_API_KEY": "meta-secret",
+            "OPENROUTER_API_KEY": "openrouter-secret",
+        }, clear=True):
+            client = AIClient(provider="openrouter")
+        self.assertEqual(client.provider, "openrouter")
+        self.assertEqual(client.api_key, "openrouter-secret")
+        self.assertEqual(client.base_url, "https://openrouter.ai/api/v1")
+
+    def test_explicit_meta_uses_only_the_meta_key(self):
+        with patch.dict("os.environ", {
+            "MODEL_API_KEY": "meta-secret",
+            "OPENROUTER_API_KEY": "openrouter-secret",
+        }, clear=True):
+            client = AIClient(provider="meta")
+        self.assertEqual(client.api_key, "meta-secret")
+        self.assertEqual(client.base_url, "https://api.meta.ai/v1")
+
+    def test_openrouter_does_not_fall_back_to_a_meta_key(self):
+        with patch.dict("os.environ", {"MODEL_API_KEY": "meta-secret"}, clear=True):
+            client = AIClient(provider="openrouter")
+            self.assertEqual(client.api_key, "")
+            with patch("agents.requests.post") as post:
+                with self.assertRaisesRegex(AIProviderError, "OPENROUTER_API_KEY"):
+                    client.chat("system", "research", enable_web_search=True)
+                post.assert_not_called()
+
+    def test_meta_does_not_fall_back_to_an_openrouter_key(self):
+        with patch.dict("os.environ", {"OPENROUTER_API_KEY": "openrouter-secret"}, clear=True):
+            client = AIClient(provider="meta")
+            self.assertEqual(client.api_key, "")
+            with patch("agents.requests.post") as post:
+                with self.assertRaisesRegex(AIProviderError, "MODEL_API_KEY"):
+                    client.chat("system", "research", enable_web_search=True)
+                post.assert_not_called()
+
+    def test_legacy_ai_api_key_is_an_openrouter_only_fallback(self):
+        with patch.dict("os.environ", {"AI_API_KEY": "legacy-openrouter-secret"}, clear=True):
+            client = AIClient(provider="openrouter")
+        self.assertEqual(client.api_key, "legacy-openrouter-secret")
+
+    def test_default_provider_still_prefers_meta_when_its_key_exists(self):
+        with patch.dict("os.environ", {
+            "MODEL_API_KEY": "meta-secret",
+            "OPENROUTER_API_KEY": "openrouter-secret",
+        }, clear=True):
+            client = AIClient()
+        self.assertEqual(client.provider, "meta")
+        self.assertEqual(client.api_key, "meta-secret")
+
+    def test_explicit_api_key_overrides_provider_environment(self):
+        with patch.dict("os.environ", {
+            "MODEL_API_KEY": "meta-secret",
+            "OPENROUTER_API_KEY": "openrouter-secret",
+        }, clear=True):
+            client = AIClient(api_key="chosen-openrouter-key", provider="openrouter")
+        self.assertEqual(client.api_key, "chosen-openrouter-key")
+
+    def test_unknown_provider_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "Provider must be either"):
+            AIClient(api_key="test-key", provider="unknown")
+
+
 class ResearchModeValidationTests(unittest.TestCase):
     def test_supported_modes_are_normalized(self):
         self.assertEqual(normalize_research_mode(" FOCUSED "), "focused")
