@@ -148,7 +148,7 @@ def normalize_public_http_url(url):
 
     reserved_suffixes = (
         ".localhost", ".local", ".internal", ".test", ".invalid",
-        ".example", ".home.arpa", ".lan", ".corp",
+        ".example", ".arpa", ".home.arpa", ".lan", ".corp", ".onion",
     )
     if ascii_host == "localhost" or ascii_host.endswith(reserved_suffixes):
         return None
@@ -170,7 +170,9 @@ def normalize_public_http_url(url):
         ):
             return None
     else:
-        if not address.is_global:
+        # Python may classify multicast ranges as global; they are not safe
+        # public destinations for user-facing research links.
+        if not address.is_global or address.is_multicast or address.is_reserved:
             return None
 
     return quote(candidate, safe=":/?#[]@!$&'()*+,;=%-._~")
